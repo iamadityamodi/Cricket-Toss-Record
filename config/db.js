@@ -3,15 +3,18 @@ import mysql from "mysql2/promise";
 
 dotenv.config();
 
+const databaseUrl = process.env.DATABASE_URL;
+
+if (!databaseUrl) {
+    throw new Error("DATABASE_URL environment variable is not set");
+}
+
 const mySqlPool = mysql.createPool({
-    host: process.env.DB_HOST,
-    user: process.env.DB_USERNAME,
-    password: process.env.DB_PASSWORD,
-    database: process.env.DATABASE,
-    port: process.env.DB_PORT,
+    uri: databaseUrl,
     waitForConnections: true,
     connectionLimit: 10,
     queueLimit: 0
 });
 
 export default mySqlPool;
+
