@@ -162,7 +162,7 @@ const login = async (req, res) => {
         } else {
             return res.status(200).send({
                 success: false,
-                message: 'Invalid username and password'
+                message: 'Invalid Username and Password'
             });
         }
 
