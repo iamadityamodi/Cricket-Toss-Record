@@ -479,7 +479,7 @@ const getAllSeries = async (req, res) => {
 
         res.status(200).send({
             success: true,
-            message: 'Success',
+            message: 'Success...',
             data: data,
         });
 
@@ -938,16 +938,17 @@ const updateTossStatus = async (req, res) => {
             [id]
         );
 
-        if (checkStatus.length === 0) {
-            return res.status(404).json({
-                success: false,
-                message: "Match not found"
-            });
-        }
+                if (checkStatus.length === 0) {
+                    return res.status(404).json({
+                        success: false,
+                        message: "Match not found"
+                    });
+                }
 
 
 
-        const thisteamwon =
+
+            const thisteamwon =
             teamName + " won the toss and opt to " + tossdeccide;
 
         await connection.query(
