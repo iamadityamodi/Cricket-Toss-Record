@@ -4,8 +4,9 @@ import { DateTime } from "luxon";
 
 
 const createUser = async (req, res) => {
+    let connection;
     try {
-        const connection = await db.getConnection();
+        connection = await db.connect();
         const { firstname, middlename, lastname, selectlogintype, emailid, passoword, confirmpassoword, mobileno } = req.body
         if (!firstname) {
             return res.status(500).send({
@@ -49,10 +50,10 @@ const createUser = async (req, res) => {
             });
         }
 
-        await connection.beginTransaction();
+        await connection.query("BEGIN");
 
-        const [tblusertype] = await connection.query(
-            "SELECT * FROM tblusertype WHERE id = ?",
+        const { rows: tblusertype } = await connection.query(
+            "SELECT * FROM tblusertype WHERE id = $1",
             [selectlogintype]
         );
 
@@ -65,6 +66,7 @@ const createUser = async (req, res) => {
 
         } else {
 
+            await connection.query("ROLLBACK");
             return res.status(500).send({
                 success: false,
                 message: 'Not available any login type'
@@ -72,12 +74,13 @@ const createUser = async (req, res) => {
         }
 
         // ✅ Check mobile exists
-        const [existingMobile] = await db.query(
-            "SELECT * FROM tabregistration WHERE mobileno = ?",
+        const { rows: existingMobile } = await connection.query(
+            "SELECT * FROM tabregistration WHERE mobileno = $1",
             [mobileno]
         );
 
         if (existingMobile.length > 0) {
+            await connection.query("ROLLBACK");
             return res.status(400).send({
                 success: false,
                 message: "Mobile number already exists"
@@ -85,12 +88,13 @@ const createUser = async (req, res) => {
         }
 
         // ✅ Check email exists
-        const [existingEmailid] = await db.query(
-            "SELECT * FROM tabregistration WHERE emailid = ?",
+        const { rows: existingEmailid } = await connection.query(
+            "SELECT * FROM tabregistration WHERE emailid = $1",
             [emailid]
         );
 
         if (existingEmailid.length > 0) {
+            await connection.query("ROLLBACK");
             return res.status(400).send({
                 success: false,
                 message: "Email ID already exists"
@@ -100,10 +104,12 @@ const createUser = async (req, res) => {
 
         const formattedDate = getIndianDateTime();
 
-        const [data] = await db.query(
+        await connection.query(
             `INSERT INTO tabregistration ( firstname , middlename, lastname,logintype, emailid, password, mobileno, createdate,  updateddate )  
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-            [firstname, middlename, lastname, newLoginType, emailid, passoword, mobileno, formattedDate, null])
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+            [firstname, middlename, lastname, newLoginType, emailid, passoword, mobileno, formattedDate, null]);
+
+        await connection.query("COMMIT");
 
         res.set('Cache-Control', 'no-store');
         res.status(202).send({
@@ -112,11 +118,18 @@ const createUser = async (req, res) => {
         })
     } catch (error) {
         console.log(error)
+        if (connection) {
+            try {
+                await connection.query("ROLLBACK");
+            } catch (e) { }
+        }
         res.status(500).send({
             success: false,
             message: 'Error in create student API',
             error
         })
+    } finally {
+        if (connection) connection.release();
     }
 }
 
@@ -138,8 +151,8 @@ const login = async (req, res) => {
         }
 
 
-        const [rows] = await db.query(
-            'SELECT * FROM tabregistration WHERE mobileno = ? AND password = ?',
+        const { rows } = await db.query(
+            'SELECT * FROM tabregistration WHERE mobileno = $1 AND password = $2',
             [mobileno, password]
         );
 
@@ -190,8 +203,8 @@ const dashboard = async (req, res) => {
         }
 
 
-        const [rows] = await db.query(
-            'SELECT * FROM tabregistration WHERE id',
+        const { rows } = await db.query(
+            'SELECT * FROM tabregistration WHERE id = $1',
             [id]
         );
 
@@ -260,7 +273,7 @@ const Usertype = async (req, res) => {
 
 
         const data = await db.query(
-            `INSERT INTO tblusertype ( usertype )  VALUES (?)`,
+            `INSERT INTO tblusertype ( usertype )  VALUES ($1)`,
             [usertype])
 
         if (!data) {
@@ -287,7 +300,7 @@ const Usertype = async (req, res) => {
 const getUsertype = async (req, res) => {
     try {
 
-        const [data] = await db.query(" SELECT * FROM tblusertype")
+        const { rows: data } = await db.query(" SELECT * FROM tblusertype")
 
         // data will always be an array, so check its length
         if (data.length === 0) {
@@ -319,15 +332,15 @@ const deleteUsertype = async (req, res) => {
 
         const { id } = req.body;   // ✅ get id from params
 
-        const [result] = await db.query(
-            "DELETE FROM tblusertype WHERE id = ?",
+        const result = await db.query(
+            "DELETE FROM tblusertype WHERE id = $1",
             [id]
         );
 
         console.log("id", id);
 
 
-        if (result.affectedRows === 0) {
+        if (result.rowCount === 0) {
             return res.status(404).send({
                 success: false,
                 message: "Record not found"
@@ -390,17 +403,25 @@ const series = async (req, res) => {
             "YYYY-MM-DDTHH:mm:ss.SSSZ"
         ];
 
+        const betStartUser = moment.tz(betStartTime, formats, zone);
         const betEndUser = moment.tz(betEndTime, formats, zone);
+
+        if (!betStartUser.isValid()) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid date format OF statdate"
+            });
+        }
 
         if (!betEndUser.isValid()) {
             return res.status(400).json({
                 success: false,
-                message: "Invalid date format"
+                message: "Invalid date format enddate"
             });
         }
 
         const EndUTime = betEndUser.utc().format("YYYY-MM-DD HH:mm:ss");
-        const StartTime = betEndUser.utc().format("YYYY-MM-DD HH:mm:ss");
+        const StartTime = betStartUser.utc().format("YYYY-MM-DD HH:mm:ss");
 
         const betStartUTC = DateTime.utc().toSQL({ includeOffset: false });
 
@@ -415,7 +436,7 @@ const series = async (req, res) => {
             `INSERT INTO tblseries
             (seriesname, seriestype, betStartTime, betEndTime,
              created_date, updated_date)
-             VALUES (?, ?, ?, ?, ?, ?)`,
+             VALUES ($1, $2, $3, $4, $5, $6)`,
             [
 
                 seriesname, seriestype, StartTime, EndUTime, betStartUTC, null
@@ -459,7 +480,7 @@ const getAllSeries = async (req, res) => {
         let values = [];
 
         if (type && type.trim() !== "") {
-            query += " AND TRIM(LOWER(seriestype)) = TRIM(LOWER(?))";
+            query += " AND TRIM(LOWER(seriestype)) = TRIM(LOWER($1))";
             values.push(type);
         }
 
@@ -467,7 +488,7 @@ const getAllSeries = async (req, res) => {
         console.log("SQL:", query);
         console.log("Values:", values);
 
-        const [data] = await db.query(query, values);
+        const { rows: data } = await db.query(query, values);
 
         if (data.length === 0) {
             return res.status(404).send({
@@ -498,15 +519,15 @@ const deleteAllSeries = async (req, res) => {
 
         const { id } = req.body;   // ✅ get id from params
 
-        const [result] = await db.query(
-            "DELETE FROM tblseries WHERE id = ?",
+        const result = await db.query(
+            "DELETE FROM tblseries WHERE id = $1",
             [id]
         );
 
         console.log("id", id);
 
 
-        if (result.affectedRows === 0) {
+        if (result.rowCount === 0) {
             return res.status(404).send({
                 success: false,
                 message: "Record not found"
@@ -545,7 +566,7 @@ const Seriestype = async (req, res) => {
 
 
         const data = await db.query(
-            `INSERT INTO tblseriestype ( seriestype )  VALUES (?)`,
+            `INSERT INTO tblseriestype ( seriestype )  VALUES ($1)`,
             [seriestype])
 
         if (!data) {
@@ -572,7 +593,7 @@ const Seriestype = async (req, res) => {
 const getSeriestype = async (req, res) => {
     try {
 
-        const [data] = await db.query(" SELECT * FROM tblseriestype")
+        const { rows: data } = await db.query(" SELECT * FROM tblseriestype")
 
         // data will always be an array, so check its length
         if (data.length === 0) {
@@ -604,15 +625,15 @@ const deleteSeriestype = async (req, res) => {
 
         const { id } = req.body;   // ✅ get id from params
 
-        const [result] = await db.query(
-            "DELETE FROM tblseriestype WHERE id = ?",
+        const result = await db.query(
+            "DELETE FROM tblseriestype WHERE id = $1",
             [id]
         );
 
         console.log("id", id);
 
 
-        if (result.affectedRows === 0) {
+        if (result.rowCount === 0) {
             return res.status(404).send({
                 success: false,
                 message: "Record not found"
@@ -650,7 +671,7 @@ const MatchFormat = async (req, res) => {
 
 
         const data = await db.query(
-            `INSERT INTO tblmatchformat ( formatname )  VALUES (?)`,
+            `INSERT INTO tblmatchformat ( formatname )  VALUES ($1)`,
             [formatname])
 
         if (!data) {
@@ -677,7 +698,7 @@ const MatchFormat = async (req, res) => {
 const getMatchFormat = async (req, res) => {
     try {
 
-        const [data] = await db.query(" SELECT * FROM tblmatchformat")
+        const { rows: data } = await db.query(" SELECT * FROM tblmatchformat")
 
         // data will always be an array, so check its length
         if (data.length === 0) {
@@ -709,15 +730,15 @@ const deleteMatchFormat = async (req, res) => {
 
         const { id } = req.body;   // ✅ get id from params
 
-        const [result] = await db.query(
-            "DELETE FROM tblmatchformat WHERE id = ?",
+        const result = await db.query(
+            "DELETE FROM tblmatchformat WHERE id = $1",
             [id]
         );
 
         console.log("id", id);
 
 
-        if (result.affectedRows === 0) {
+        if (result.rowCount === 0) {
             return res.status(404).send({
                 success: false,
                 message: "Record not found"
@@ -742,10 +763,10 @@ const deleteMatchFormat = async (req, res) => {
 
 const schedules = async (req, res) => {
 
-    const connection = await db.getConnection();
-
+    let connection;
 
     try {
+        connection = await db.connect();
         const { seriesid, matchFormatid, startDate, endDate, teamName1, teamName2, userZone } = req.body
 
         if (!seriesid) {
@@ -780,8 +801,8 @@ const schedules = async (req, res) => {
             })
         }
 
-        const [seriesdata] = await connection.query(
-            "SELECT seriesname FROM tblseries WHERE id = ?",
+        const { rows: seriesdata } = await connection.query(
+            "SELECT seriesname FROM tblseries WHERE id = $1",
             [seriesid]
         );
 
@@ -802,8 +823,8 @@ const schedules = async (req, res) => {
 
         console.log("newBal", newSeriesName);
 
-        const [matchformatdata] = await connection.query(
-            "SELECT formatname FROM tblmatchformat WHERE id = ?",
+        const { rows: matchformatdata } = await connection.query(
+            "SELECT formatname FROM tblmatchformat WHERE id = $1",
             [matchFormatid]
         );
 
@@ -863,17 +884,17 @@ const schedules = async (req, res) => {
         await db.query(
             `INSERT INTO tblschedule
             (seriesid, seriesname,
-            matchformatid, matchFormat, 
+            matchformatid, matchFormat,     
             startDate, endDate,
              teamName1, teamName2,
               tosswonstatus, tossstatus,
              createddate, updateddate)
-             VALUES (?, ?,
-              ?, ?,
-             ?, ?, 
-             ?, ?, 
-             ?, ?,
-               ?, ?)`,
+             VALUES ($1, $2,
+              $3, $4,
+             $5, $6, 
+             $7, $8,
+             $9, $10,
+               $11, $12)`,
             [
                 seriesid, newSeriesName,
                 matchFormatid, newMatchFormatName,
@@ -901,15 +922,18 @@ const schedules = async (req, res) => {
             message: "Error creating bet",
             error: error.message
         });
+    } finally {
+        if (connection) connection.release();
     }
 }
 
 
 const updateTossStatus = async (req, res) => {
 
-    const connection = await db.getConnection();
+    let connection;
 
     try {
+        connection = await db.connect();
 
         const { id, teamName, tossdeccide } = req.body;
 
@@ -930,15 +954,17 @@ const updateTossStatus = async (req, res) => {
             });
         }
 
-        await connection.beginTransaction();
+        await connection.query("BEGIN");
 
         // ✅ Check if already completed
-        const [checkStatus] = await connection.query(
-            "SELECT * FROM tblschedule WHERE id = ?",
+        const { rows: checkStatus } = await connection.query(
+            
+            "SELECT * FROM tblschedule WHERE id = $1",
             [id]
         );
 
                 if (checkStatus.length === 0) {
+                    await connection.query("ROLLBACK");
                     return res.status(404).json({
                         success: false,
                         message: "Match not found"
@@ -953,13 +979,13 @@ const updateTossStatus = async (req, res) => {
 
         await connection.query(
             `UPDATE tblschedule 
-     SET tosswonstatus = ?, 
+     SET tosswonstatus = $1, 
          tossstatus = true
-     WHERE id = ?`,
+     WHERE id = $2`,
             [thisteamwon, id]
         );
 
-        await connection.commit();
+        await connection.query("COMMIT");
 
         return res.status(200).json({
             success: true,
@@ -970,11 +996,18 @@ const updateTossStatus = async (req, res) => {
 
     } catch (error) {
         console.log(error)
+        if (connection) {
+            try {
+                await connection.query("ROLLBACK");
+            } catch (e) { }
+        }
         res.status(500).send({
             success: false,
             message: 'Error in Get All Student API',
             error
         })
+    } finally {
+        if (connection) connection.release();
     }
 
 }
@@ -995,29 +1028,29 @@ const getSchedule = async (req, res) => {
         let values = [];
 
         if (format && format.trim() !== "") {
-            query += " AND TRIM(LOWER(matchFormat)) = TRIM(LOWER(?))";
+            query += ` AND TRIM(LOWER(matchFormat)) = TRIM(LOWER($${values.length + 1}))`;
             values.push(format);
         }
 
         if (seriesname && seriesname.trim() !== "") {
-            query += " AND TRIM(LOWER(seriesname)) = TRIM(LOWER(?))";
+            query += ` AND TRIM(LOWER(seriesname)) = TRIM(LOWER($${values.length + 1}))`;
             values.push(seriesname);
         }
 
         if (teamName1 && teamName1.trim() !== "") {
-            query += " AND TRIM(LOWER(teamName1)) = TRIM(LOWER(?))";
+            query += ` AND TRIM(LOWER(teamName1)) = TRIM(LOWER($${values.length + 1}))`;
             values.push(teamName1);
         }
 
         if (teamName2 && teamName2.trim() !== "") {
-            query += " AND TRIM(LOWER(teamName2)) = TRIM(LOWER(?))";
+            query += ` AND TRIM(LOWER(teamName2)) = TRIM(LOWER($${values.length + 1}))`;
             values.push(teamName2);
         }
 
         console.log("SQL:", query);
         console.log("Values:", values);
 
-        const [data] = await db.query(query, values);
+        const { rows: data } = await db.query(query, values);
 
         if (data.length === 0) {
             return res.status(404).send({
