@@ -365,7 +365,7 @@ const deleteUsertype = async (req, res) => {
 
 const series = async (req, res) => {
 
-     console.log("BODY => ", req.body);
+    console.log("BODY => ", req.body);
 
     try {
         const { id, seriesname, seriestype, betStartTime, betEndTime, userZone } = req.body
@@ -464,7 +464,7 @@ const series = async (req, res) => {
 
             return res.status(200).json({
                 success: true,
-                message: "Successfully Updated....................assasasa..asasasasasaasasassasasassdsdasas"
+                message: "Successfully Updated"
             });
         }
 
@@ -806,7 +806,7 @@ const schedules = async (req, res) => {
 
     try {
         connection = await db.connect();
-        const { seriesid, matchFormatid, startDate, endDate, matchno, teamName1, teamName2, userZone } = req.body
+        const { id, seriesid, matchFormatid, startDate, endDate, matchno, teamName1, teamName2, userZone } = req.body
 
         if (!seriesid) {
             return res.status(500).send({
@@ -928,40 +928,106 @@ const schedules = async (req, res) => {
         console.log("matchno", matchno);
 
 
-        await db.query(
-            `INSERT INTO tblschedule
-            (seriesid, seriesname,
-            matchformatid, matchFormat,   
-            startDate, endDate,
-             teamName1, teamName2,
-              tosswonstatus, tossstatus,
-             createddate, updateddate,
-             matchno)
-             VALUES ($1, $2,
-              $3, $4,
-             $5, 
-             $6, $7, 
-             $8, $9, 
-             $10, $11,
-            $12, $13)`,
-            [
-                seriesid, newSeriesName,
-                matchFormatid, newMatchFormatName,
-                StartTime, EndTime,
-                teamName1, teamName2,
-                false, null,
-                createdTimeUTC, null,
-                matchno
-            ]
-        );
+        if (id) {
 
+            // Check record exists
+            const { rows: scheduleData } = await connection.query(
+                "SELECT id FROM tblschedule WHERE id = $1",
+                [id]
+            );
 
+            if (scheduleData.length === 0) {
+                return res.status(404).json({
+                    success: false,
+                    message: "Schedule not found"
+                });
+            }
 
-        return res.status(201).json({
-            success: true,
-            message: "Successfully Inserted New Macth Schedule",
+            await connection.query(
+                `UPDATE tblschedule
+         SET
+            seriesid = $1,
+            seriesname = $2,
+            matchformatid = $3,
+            matchformat = $4,
+            startDate = $5,
+            endDate = $6,
+            teamName1 = $7,
+            teamName2 = $8,
+            updateddate = $9,
+            matchno = $10
+         WHERE id = $11`,
+                [
+                    seriesid,
+                    newSeriesName,
+                    matchFormatid,
+                    newMatchFormatName,
+                    StartTime,
+                    EndTime,
+                    teamName1,
+                    teamName2,
+                    createdTimeUTC,
+                    matchno,
+                    id
+                ]
+            );
 
-        });
+            return res.status(200).json({
+                success: true,
+                message: "Schedule updated successfully"
+            });
+
+        } else {
+
+            await connection.query(
+                `INSERT INTO tblschedule
+        (
+            seriesid,
+            seriesname,
+            matchformatid,
+            matchFormat,
+            startDate,
+            endDate,
+            teamName1,
+            teamName2,
+            tosswonstatus,
+            tossstatus,
+            createddate,
+            updateddate,
+            matchno
+        )
+        VALUES
+        (
+            $1,$2,
+            $3,$4,
+            $5,$6,
+            $7,$8,
+            $9,$10,
+            $11,$12,
+            $13
+        )`,
+                [
+                    seriesid,
+                    newSeriesName,
+                    matchFormatid,
+                    newMatchFormatName,
+                    StartTime,
+                    EndTime,
+                    teamName1,
+                    teamName2,
+                    false,
+                    null,
+                    createdTimeUTC,
+                    null,
+                    matchno
+                ]
+            );
+
+            return res.status(201).json({
+                success: true,
+                message: "Successfully Inserted New Match Schedule"
+            });
+        }
 
     } catch (error) {
 
