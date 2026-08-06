@@ -18,7 +18,9 @@
     "express": "^5.2.1",
     "luxon": "^3.7.2",
     "moment-timezone": "^0.6.1",
-    "nodemon": "^3.1.14",
     "pg": "^8.22.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.14"
   }
 }

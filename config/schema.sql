@@ -54,3 +54,7 @@ CREATE TABLE IF NOT EXISTS tblschedule (
     createddate TIMESTAMP,
     updateddate TIMESTAMP
 );
+
+
+ALTER TABLE tblschedule
+ALTER COLUMN tosswonstatus TYPE TEXT;

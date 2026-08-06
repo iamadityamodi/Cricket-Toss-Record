@@ -1,6 +1,7 @@
 import express from "express";
 
-import { createUser, dashboard, deleteAllSeries, deleteMatchFormat, deleteSeriestype, deleteUsertype, getAllSeries, getMatchFormat, getSchedule, getSeriestype, getUsertype, login, MatchFormat, schedules, series, Seriestype, updateTossStatus, Usertype } from "../controllers/crictosscontrollers.js"
+import { createUser, dashboard, deleteAllSeries, deleteMatchFormat, deleteSeriestype, deleteUsertype, getAllSeries, getMatchFormat, getSchedule, getSeriestype, getUsertype, login, MatchFormat, schedules, series, Seriestype, updateTossStatus, Usertype } 
+from "../controllers/crictosscontrollers.js"
 
 
 const router = express.Router();
@@ -25,7 +26,7 @@ router.post("/deleteAllSeries", deleteAllSeries);
 // Create and get Schedule
 router.post("/schedules", schedules);
 router.post("/getSchedule", getSchedule);
-router.post("/updateTossStatus", updateTossStatus);
+ router.post("/updateTossStatus", updateTossStatus);
 
 // Series Type
 router.post("/Seriestype", Seriestype);

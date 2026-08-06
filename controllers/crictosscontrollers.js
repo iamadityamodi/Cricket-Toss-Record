@@ -7,7 +7,7 @@ const createUser = async (req, res) => {
     let connection;
     try {
         connection = await db.connect();
-        const { firstname, middlename, lastname, selectlogintype, emailid, passoword, confirmpassoword, mobileno } = req.body
+        const { id, firstname, middlename, lastname, selectlogintype, emailid, passoword, confirmpassoword, mobileno } = req.body
         if (!firstname) {
             return res.status(500).send({
                 success: false,
@@ -61,11 +61,8 @@ const createUser = async (req, res) => {
         let newLoginType = null
 
         if (tblusertype.length > 0) {
-
             newLoginType = tblusertype[0].usertype;
-
         } else {
-
             await connection.query("ROLLBACK");
             return res.status(500).send({
                 success: false,
@@ -103,6 +100,7 @@ const createUser = async (req, res) => {
 
 
         const formattedDate = getIndianDateTime();
+
 
         await connection.query(
             `INSERT INTO tabregistration ( firstname , middlename, lastname,logintype, emailid, password, mobileno, createdate,  updateddate )  
@@ -169,7 +167,7 @@ const login = async (req, res) => {
                     logintype: user.logintype,
                     emailid: user.emailid,
                     mobileno: user.mobileno,
-                    
+
                 }
             });
         } else {
@@ -195,7 +193,7 @@ const dashboard = async (req, res) => {
         const { id } = req.body;
 
         if (!id) {
-           
+
             return res.status(200).send({
                 success: false,
                 message: 'Data Not Load'
@@ -219,8 +217,8 @@ const dashboard = async (req, res) => {
                     firstname: user.firstname,
                     lastname: user.lastname,
                     logintype: user.logintype,
-                    
-                     
+
+
                 }
             });
         } else {
@@ -367,9 +365,10 @@ const deleteUsertype = async (req, res) => {
 
 const series = async (req, res) => {
 
+     console.log("BODY => ", req.body);
 
     try {
-        const { seriesname, seriestype, betStartTime, betEndTime, userZone } = req.body
+        const { id, seriesname, seriestype, betStartTime, betEndTime, userZone } = req.body
 
         if (!seriesname) {
             return res.status(500).send({
@@ -427,28 +426,68 @@ const series = async (req, res) => {
 
 
 
+        /* =====================================================
+           UPDATE (id provided and series exists)
+        ===================================================== */
+
+        if (id) {
+            const { rows: checkSeries } = await db.query(
+                `SELECT id FROM tblseries WHERE id = $1`,
+                [id]
+            );
+
+            if (checkSeries.length === 0) {
+                return res.status(404).json({
+                    success: false,
+                    message: "Series not found"
+                });
+            }
+
+            await db.query(
+                `UPDATE tblseries
+             SET
+                seriesname = $1,
+                seriestype = $2,
+                betStartTime = $3,
+                betEndTime = $4,
+                updated_date = $5
+             WHERE id = $6`,
+                [
+                    seriesname,
+                    seriestype,
+                    StartTime,
+                    EndUTime,
+                    betStartUTC,
+                    id
+                ]
+            );
+
+            return res.status(200).json({
+                success: true,
+                message: "Successfully Updated....................assasasa..asasasasasaasasassasasassdsdasas"
+            });
+        }
 
         /* =====================================================
-           INSERT
+           INSERT (new series)
         ===================================================== */
+
+        console.log("Series does not exist, inserting new series...");
 
         await db.query(
             `INSERT INTO tblseries
-            (seriesname, seriestype, betStartTime, betEndTime,
-             created_date, updated_date)
-             VALUES ($1, $2, $3, $4, $5, $6)`,
+        (seriesname, seriestype, betStartTime, betEndTime,
+         created_date, updated_date)
+         VALUES ($1, $2, $3, $4, $5, $6)`,
             [
 
                 seriesname, seriestype, StartTime, EndUTime, betStartUTC, null
             ]
         );
 
-
-
         return res.status(201).json({
             success: true,
-            message: "Successfully Inserted New Series",
-
+            message: "Successfully Inserted New Series"
         });
 
     } catch (error) {
@@ -466,7 +505,7 @@ const series = async (req, res) => {
 const getAllSeries = async (req, res) => {
     try {
 
-       
+
 
         console.log("Body Data:", req.body); // 🔍 Debug
 
@@ -484,7 +523,7 @@ const getAllSeries = async (req, res) => {
             values.push(type);
         }
 
-         
+
         console.log("SQL:", query);
         console.log("Values:", values);
 
@@ -767,7 +806,7 @@ const schedules = async (req, res) => {
 
     try {
         connection = await db.connect();
-        const { seriesid, matchFormatid, startDate, endDate, teamName1, teamName2, userZone } = req.body
+        const { seriesid, matchFormatid, startDate, endDate, matchno, teamName1, teamName2, userZone } = req.body
 
         if (!seriesid) {
             return res.status(500).send({
@@ -778,6 +817,11 @@ const schedules = async (req, res) => {
             return res.status(500).send({
                 success: false,
                 message: 'Please select matchFormat'
+            })
+        } else if (!matchno) {
+            return res.status(500).send({
+                success: false,
+                message: 'Please enter match number namme'
             })
         } else if (!startDate) {
             return res.status(500).send({
@@ -881,27 +925,33 @@ const schedules = async (req, res) => {
            INSERT
         ===================================================== */
 
+        console.log("matchno", matchno);
+
+
         await db.query(
             `INSERT INTO tblschedule
             (seriesid, seriesname,
-            matchformatid, matchFormat,     
+            matchformatid, matchFormat,   
             startDate, endDate,
              teamName1, teamName2,
               tosswonstatus, tossstatus,
-             createddate, updateddate)
+             createddate, updateddate,
+             matchno)
              VALUES ($1, $2,
               $3, $4,
-             $5, $6, 
-             $7, $8,
-             $9, $10,
-               $11, $12)`,
+             $5, 
+             $6, $7, 
+             $8, $9, 
+             $10, $11,
+            $12, $13)`,
             [
                 seriesid, newSeriesName,
                 matchFormatid, newMatchFormatName,
                 StartTime, EndTime,
                 teamName1, teamName2,
                 false, null,
-                createdTimeUTC, null
+                createdTimeUTC, null,
+                matchno
             ]
         );
 
@@ -926,6 +976,8 @@ const schedules = async (req, res) => {
         if (connection) connection.release();
     }
 }
+
+
 
 
 const updateTossStatus = async (req, res) => {
@@ -958,23 +1010,23 @@ const updateTossStatus = async (req, res) => {
 
         // ✅ Check if already completed
         const { rows: checkStatus } = await connection.query(
-            
+
             "SELECT * FROM tblschedule WHERE id = $1",
             [id]
         );
 
-                if (checkStatus.length === 0) {
-                    await connection.query("ROLLBACK");
-                    return res.status(404).json({
-                        success: false,
-                        message: "Match not found"
-                    });
-                }
+        if (checkStatus.length === 0) {
+            await connection.query("ROLLBACK");
+            return res.status(404).json({
+                success: false,
+                message: "Match not found"
+            });
+        }
 
 
 
 
-            const thisteamwon =
+        const thisteamwon =
             teamName + " won the toss and opt to " + tossdeccide;
 
         await connection.query(
@@ -1079,5 +1131,6 @@ const getSchedule = async (req, res) => {
 
 
 export {
-    createUser,login,dashboard, Usertype, getUsertype, deleteUsertype, series, getAllSeries, deleteAllSeries, Seriestype, getSeriestype, deleteSeriestype, MatchFormat, deleteMatchFormat, getMatchFormat, schedules, getSchedule, updateTossStatus
+    createUser, login, dashboard, Usertype, getUsertype, deleteUsertype, series, getAllSeries, deleteAllSeries, Seriestype,
+    getSeriestype, deleteSeriestype, MatchFormat, deleteMatchFormat, getMatchFormat, schedules, getSchedule, updateTossStatus
 }
