@@ -974,7 +974,7 @@ const schedules = async (req, res) => {
 
             return res.status(200).json({
                 success: true,
-                message: "Schedule updated successfully"
+                message: "Schedule updated successfully..."
             });
 
         } else {
