@@ -58,10 +58,12 @@ const createUser = async (req, res) => {
         );
 
 
+        let newLoginID = null
         let newLoginType = null
 
         if (tblusertype.length > 0) {
             newLoginType = tblusertype[0].usertype;
+            newLoginID = tblusertype[0].id;
         } else {
             await connection.query("ROLLBACK");
             return res.status(500).send({
@@ -103,9 +105,18 @@ const createUser = async (req, res) => {
 
 
         await connection.query(
-            `INSERT INTO tabregistration ( firstname , middlename, lastname,logintype, emailid, password, mobileno, createdate,  updateddate )  
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-            [firstname, middlename, lastname, newLoginType, emailid, passoword, mobileno, formattedDate, null]);
+            `INSERT INTO tabregistration ( firstname , middlename, lastname,
+            logintype,  emailid,
+             password, mobileno, createdate,  
+             updateddate, logintypeid )  
+            VALUES ($1, $2, $3,
+             $4, $5, $6,
+              $7, $8, $9, 
+              $10)`,
+            [firstname, middlename, lastname,
+                newLoginType, emailid,
+                passoword, mobileno, formattedDate,
+                null, newLoginID]);
 
         await connection.query("COMMIT");
 
@@ -128,6 +139,37 @@ const createUser = async (req, res) => {
         })
     } finally {
         if (connection) connection.release();
+    }
+}
+
+
+const getAllUsers = async (req, res) => {
+    try {
+
+        const { rows: data } = await db.query(" SELECT * FROM tabregistration")
+
+        // data will always be an array, so check its length
+        if (data.length === 0) {
+            return res.status(404).send({
+                success: false,
+                message: 'No Users Available',
+                data: []
+            });
+        }
+
+
+        res.status(200).send({
+            success: true,
+            message: 'Success.',
+            data: data,
+        })
+    } catch (error) {
+        console.log(error)
+        res.status(500).send({
+            success: false,
+            message: 'Error in get all series type API',
+            error
+        })
     }
 }
 
@@ -506,9 +548,6 @@ const getAllSeries = async (req, res) => {
     try {
 
 
-
-        console.log("Body Data:", req.body); // 🔍 Debug
-
         const { seriestype } = req.body;
 
         // दोनों handle (typo + correct)
@@ -539,7 +578,7 @@ const getAllSeries = async (req, res) => {
 
         res.status(200).send({
             success: true,
-            message: 'Success...',
+            message: 'Success......',
             data: data,
         });
 
@@ -1136,7 +1175,7 @@ const getSchedule = async (req, res) => {
 
         console.log("Body Data:", req.body); // 🔍 Debug
 
-        const { matchFormat, seriesname, teamName1, teamName2 } = req.body;
+        const { seriesid, matchFormat, seriesname, teamName1, teamName2 } = req.body;
 
         // दोनों handle (typo + correct)
         const format = matchFormat;
@@ -1144,6 +1183,12 @@ const getSchedule = async (req, res) => {
 
         let query = "SELECT * FROM tblschedule WHERE 1=1";
         let values = [];
+
+        // Series ID Filter
+        if (seriesid) {
+            query += ` AND seriesid = $${values.length + 1}`;
+            values.push(seriesid);
+        }
 
         if (format && format.trim() !== "") {
             query += ` AND TRIM(LOWER(matchFormat)) = TRIM(LOWER($${values.length + 1}))`;
@@ -1197,6 +1242,6 @@ const getSchedule = async (req, res) => {
 
 
 export {
-    createUser, login, dashboard, Usertype, getUsertype, deleteUsertype, series, getAllSeries, deleteAllSeries, Seriestype,
+    createUser, getAllUsers, login, dashboard, Usertype, getUsertype, deleteUsertype, series, getAllSeries, deleteAllSeries, Seriestype,
     getSeriestype, deleteSeriestype, MatchFormat, deleteMatchFormat, getMatchFormat, schedules, getSchedule, updateTossStatus
 }
