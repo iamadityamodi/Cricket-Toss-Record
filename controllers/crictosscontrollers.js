@@ -548,10 +548,13 @@ const getAllSeries = async (req, res) => {
     try {
 
 
+
         const { seriestype } = req.body;
 
         // दोनों handle (typo + correct)
         const type = seriestype;
+
+        console.log("Body Data:", type); // 🔍 Debug
 
 
         let query = "SELECT * FROM tblseries WHERE 1=1";
