@@ -337,6 +337,73 @@ const Usertype = async (req, res) => {
     }
 }
 
+// Set Conatct US
+
+const ContactUS = async (req, res) => {
+    try {
+        const { name, emailid, message } = req.body
+
+
+        if (!name || !name.trim()) {
+            return res.status(400).send({
+                success: false,
+                message: 'Please enter name'
+            });
+        }
+
+        if (!emailid || !emailid.trim()) {
+            return res.status(400).send({
+                success: false,
+                message: 'Please enter email'
+            });
+        }
+
+        // Email validation
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+        if (!emailRegex.test(emailid.trim())) {
+            return res.status(400).send({
+                success: false,
+                message: 'Please enter a valid email address'
+            });
+        }
+
+        if (!message || !message.trim()) {
+            return res.status(400).send({
+                success: false,
+                message: 'Please enter message'
+            });
+        }
+
+
+        const data = await db.query(
+            `INSERT INTO "tblContactUS" (name, email, message)
+     VALUES ($1, $2, $3)`,
+            [name.trim(), emailid.trim(), message.trim()]
+        );
+
+        if (!data) {
+            return res.status(404).send({
+                success: false,
+                message: 'Error in insert query'
+            })
+        }
+
+        res.status(202).send({
+            success: true,
+            message: 'Successfully Inserted.'
+        })
+
+    } catch (error) {
+        console.log(error)
+        res.status(500).send({
+            success: false,
+            message: 'Error in Contact US API',
+            error
+        })
+    }
+}
+
 const getUsertype = async (req, res) => {
     try {
 
@@ -1024,18 +1091,12 @@ const schedules = async (req, res) => {
             await connection.query(
                 `INSERT INTO tblschedule
         (
-            seriesid,
-            seriesname,
-            matchformatid,
-            matchFormat,
-            startDate,
-            endDate,
-            teamName1,
-            teamName2,
-            tosswonstatus,
-            tossstatus,
-            createddate,
-            updateddate,
+            seriesid, seriesname,
+            matchformatid,matchFormat,
+            startDate,endDate,
+            teamName1,teamName2,
+            tosswonstatus,tossstatus,
+            createddate,updateddate,
             matchno
         )
         VALUES
@@ -1049,18 +1110,12 @@ const schedules = async (req, res) => {
             $13
         )`,
                 [
-                    seriesid,
-                    newSeriesName,
-                    matchFormatid,
-                    newMatchFormatName,
-                    StartTime,
-                    EndTime,
-                    teamName1,
-                    teamName2,
-                    false,
-                    null,
-                    createdTimeUTC,
-                    null,
+                    seriesid, newSeriesName,
+                    matchFormatid, newMatchFormatName,
+                    StartTime, EndTime,
+                    teamName1, teamName2,
+                    null, false,
+                    createdTimeUTC, null,
                     matchno
                 ]
             );
@@ -1184,7 +1239,7 @@ const getSchedule = async (req, res) => {
         const format = matchFormat;
 
 
-        let query = "SELECT * FROM tblschedule WHERE 1=1";
+        let query = "SELECT * FROM tblschedule WHERE 1=1 ORDER BY id ASC";
         let values = [];
 
         // Series ID Filter
@@ -1246,5 +1301,5 @@ const getSchedule = async (req, res) => {
 
 export {
     createUser, getAllUsers, login, dashboard, Usertype, getUsertype, deleteUsertype, series, getAllSeries, deleteAllSeries, Seriestype,
-    getSeriestype, deleteSeriestype, MatchFormat, deleteMatchFormat, getMatchFormat, schedules, getSchedule, updateTossStatus
+    getSeriestype, deleteSeriestype, MatchFormat, deleteMatchFormat, getMatchFormat, schedules, getSchedule, updateTossStatus, ContactUS
 }

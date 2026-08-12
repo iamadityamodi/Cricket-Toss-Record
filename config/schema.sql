@@ -58,3 +58,11 @@ CREATE TABLE IF NOT EXISTS tblschedule (
 
 ALTER TABLE tblschedule
 ALTER COLUMN tosswonstatus TYPE TEXT;
+
+CREATE TABLE IF NOT EXISTS "tblContactUS" (
+    id SERIAL PRIMARY KEY,
+    name TEXT NOT NULL,
+    emailid TEXT NOT NULL,
+    message TEXT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
