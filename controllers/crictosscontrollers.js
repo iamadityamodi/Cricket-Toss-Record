@@ -392,7 +392,7 @@ const ContactUS = async (req, res) => {
         if (!result) {
             return res.status(404).send({
                 success: false,
-                message: 'Error in insert query'
+                message: 'Error in insert queries'
             })
         }
 
