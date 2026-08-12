@@ -376,13 +376,20 @@ const ContactUS = async (req, res) => {
         }
 
 
-        const data = await db.query(
-            `INSERT INTO "tblContactUS" (name, email, message)
-     VALUES ($1, $2, $3)`,
-            [name.trim(), emailid.trim(), message.trim()]
-        );
+        const query = `
+    INSERT INTO public."tblContactUS"
+    (name, email, message)
+    VALUES ($1, $2, $3)
+    RETURNING *
+`;
 
-        if (!data) {
+        const result = await db.query(query, [
+            name,
+            email,
+            message
+        ]);
+
+        if (!result) {
             return res.status(404).send({
                 success: false,
                 message: 'Error in insert query'
