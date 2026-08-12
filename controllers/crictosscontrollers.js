@@ -385,7 +385,7 @@ const ContactUS = async (req, res) => {
 
         const result = await db.query(query, [
             name,
-            email,
+            emailid,
             message
         ]);
 
