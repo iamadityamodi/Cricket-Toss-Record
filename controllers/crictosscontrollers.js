@@ -146,7 +146,7 @@ const createUser = async (req, res) => {
 const getAllUsers = async (req, res) => {
     try {
 
-        const { rows: data } = await db.query(" SELECT * FROM tabregistration")
+        const { rows: data } = await db.query("SELECT * FROM tabregistration")
 
         // data will always be an array, so check its length
         if (data.length === 0) {
@@ -259,14 +259,14 @@ const dashboard = async (req, res) => {
                     firstname: user.firstname,
                     lastname: user.lastname,
                     logintype: user.logintype,
-
-
+                    emailid: user.emailid,
+                    mobileno: user.mobileno,
                 }
             });
         } else {
             return res.status(200).send({
                 success: false,
-                message: 'Data Not Load'
+                message: 'User not found'
             });
         }
 
@@ -274,7 +274,7 @@ const dashboard = async (req, res) => {
         console.log(error)
         res.status(500).send({
             success: false,
-            message: 'Error in login API',
+            message: 'Error in dashboard API',
             error
         })
     }
@@ -436,6 +436,37 @@ const getUsertype = async (req, res) => {
         res.status(500).send({
             success: false,
             message: 'Error in get all series type API',
+            error
+        })
+    }
+}
+
+
+const getAllAds = async (req, res) => {
+    try {
+
+        const { rows: data } = await db.query(" SELECT * FROM tblads")
+
+        // data will always be an array, so check its length
+        if (data.length === 0) {
+            return res.status(404).send({
+                success: false,
+                message: 'No Ads Available',
+                data: []
+            });
+        }
+
+
+        res.status(200).send({
+            success: true,
+            message: 'Success.',
+            data: data,
+        })
+    } catch (error) {
+        console.log(error)
+        res.status(500).send({
+            success: false,
+            message: 'Error in get all ads API',
             error
         })
     }
@@ -623,21 +654,28 @@ const getAllSeries = async (req, res) => {
 
 
 
-        const { seriestype } = req.body;
+        const { seriesid, seriestype } = req.body;
 
-        // दोनों handle (typo + correct)
-        const type = seriestype;
-
-        console.log("Body Data:", type); // 🔍 Debug
-
-
+    
         let query = "SELECT * FROM tblseries WHERE 1=1";
         let values = [];
 
-        if (type && type.trim() !== "") {
-            query += " AND TRIM(LOWER(seriestype)) = TRIM(LOWER($1))";
-            values.push(type);
+         // Series ID
+        if (seriesid !== undefined && seriesid !== null && seriesid !== "") {
+            query += ` AND id = $${values.length + 1}`;
+            values.push(seriesid);
         }
+
+        // Series Type
+        if (seriestype && seriestype.trim() !== "") {
+            query += ` AND TRIM(LOWER(seriestype)) = TRIM(LOWER($${values.length + 1}))`;
+            values.push(seriestype);
+        }
+
+        // ORDER 
+
+        // ORDER BY MUST BE LAST
+        query += " ORDER BY id ASC";
 
 
         console.log("SQL:", query);
@@ -1246,7 +1284,7 @@ const getSchedule = async (req, res) => {
         const format = matchFormat;
 
 
-        let query = "SELECT * FROM tblschedule WHERE 1=1 ORDER BY id ASC";
+        let query = "SELECT * FROM tblschedule WHERE 1=1";
         let values = [];
 
         // Series ID Filter
@@ -1274,6 +1312,9 @@ const getSchedule = async (req, res) => {
             query += ` AND TRIM(LOWER(teamName2)) = TRIM(LOWER($${values.length + 1}))`;
             values.push(teamName2);
         }
+
+        // ORDER BY MUST BE LAST
+        query += " ORDER BY id ASC";
 
         console.log("SQL:", query);
         console.log("Values:", values);
@@ -1308,5 +1349,6 @@ const getSchedule = async (req, res) => {
 
 export {
     createUser, getAllUsers, login, dashboard, Usertype, getUsertype, deleteUsertype, series, getAllSeries, deleteAllSeries, Seriestype,
-    getSeriestype, deleteSeriestype, MatchFormat, deleteMatchFormat, getMatchFormat, schedules, getSchedule, updateTossStatus, ContactUS
+    getSeriestype, deleteSeriestype, MatchFormat, deleteMatchFormat, getMatchFormat, schedules, getSchedule, updateTossStatus, ContactUS,
+    getAllAds
 }

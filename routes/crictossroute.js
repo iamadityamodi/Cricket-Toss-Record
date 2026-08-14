@@ -1,6 +1,6 @@
 import express from "express";
 
-import { ContactUS, createUser, dashboard, deleteAllSeries, deleteMatchFormat, deleteSeriestype, deleteUsertype, getAllSeries, getAllUsers, getMatchFormat, getSchedule, getSeriestype, getUsertype, login, MatchFormat, schedules, series, Seriestype, updateTossStatus, Usertype } 
+import { ContactUS, createUser, dashboard, deleteAllSeries, deleteMatchFormat, deleteSeriestype, deleteUsertype, getAllAds, getAllSeries, getAllUsers, getMatchFormat, getSchedule, getSeriestype, getUsertype, login, MatchFormat, schedules, series, Seriestype, updateTossStatus, Usertype } 
 from "../controllers/crictosscontrollers.js"
 
 
@@ -41,6 +41,9 @@ router.post("/deleteMatchFormat", deleteMatchFormat);
 
 // Contact Us
 router.post("/ContactUS", ContactUS);
+
+// Ads
+router.post("/getAllAds", getAllAds);
 
 
 export default router;
