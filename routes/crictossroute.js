@@ -1,7 +1,8 @@
 import express from "express";
 
-import { ContactUS, createUser, dashboard, deleteAllSeries, deleteMatchFormat, deleteSeriestype, deleteUsertype, getAllAds, getAllSeries, getAllUsers, getMatchFormat, getSchedule, getSeriestype, getUsertype, login, MatchFormat, schedules, series, Seriestype, updateTossStatus, Usertype } 
-from "../controllers/crictosscontrollers.js"
+import { addMatchView, ContactUS, createGuestToken, createUser, dashboard, deleteAllSeries, deleteMatchFormat, deleteSeriestype, deleteUsertype, getAllAds, getAllSeries, getAllUsers, getMatchFormat, getSchedule, getScheduleViewCount, getSeriestype, getUsertype, insertAds, login, MatchFormat, schedules, series, Seriestype, updateTossStatus, Usertype }
+    from "../controllers/crictosscontrollers.js"
+import authenticateToken from "../controllers/authMiddleware.js";
 
 
 const router = express.Router();
@@ -10,7 +11,8 @@ const router = express.Router();
 router.post("/createUser", createUser);
 router.post("/getAllUsers", getAllUsers);
 router.post("/login", login);
-router.post("/dashboard", dashboard);
+router.post("/guest-token", createGuestToken);
+router.post("/dashboard", authenticateToken, dashboard);
 
 
 
@@ -27,7 +29,7 @@ router.post("/deleteAllSeries", deleteAllSeries);
 // Create and get Schedule
 router.post("/schedules", schedules);
 router.post("/getSchedule", getSchedule);
- router.post("/updateTossStatus", updateTossStatus);
+router.post("/updateTossStatus", updateTossStatus);
 
 // Series Type
 router.post("/Seriestype", Seriestype);
@@ -43,7 +45,13 @@ router.post("/deleteMatchFormat", deleteMatchFormat);
 router.post("/ContactUS", ContactUS);
 
 // Ads
+router.post("/insertAds", insertAds);
 router.post("/getAllAds", getAllAds);
+
+// Match View
+router.post("/match-view", authenticateToken, addMatchView);
+router.post("/schedule-view-count", getScheduleViewCount);
+
 
 
 export default router;

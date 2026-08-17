@@ -1,7 +1,8 @@
 import db from "../config/db.js";
 import moment from "moment-timezone";
 import { DateTime } from "luxon";
-
+import jwt from "jsonwebtoken";
+import crypto from "crypto";
 
 const createUser = async (req, res) => {
     let connection;
@@ -191,17 +192,55 @@ const login = async (req, res) => {
         }
 
 
+
+
         const { rows } = await db.query(
             'SELECT * FROM tabregistration WHERE mobileno = $1 AND password = $2',
             [mobileno, password]
         );
 
+
         if (rows.length > 0) {
             const user = rows[0]; // get the first (and only) user
+
+            const versionResult = await db.query(
+                `UPDATE tabregistration
+     SET token_version = COALESCE(token_version, 0) + 1
+     WHERE id = $1
+     RETURNING token_version`,
+                [user.id]
+            );
+
+            console.log("VERSION RESULT:", versionResult);
+
+            if (!versionResult.rows || versionResult.rows.length === 0) {
+                return res.status(500).send({
+                    success: false,
+                    message: "Unable to update token version"
+                });
+            }
+
+            const newTokenVersion = versionResult.rows[0].token_version;
+
+            console.log("New Token Version:", newTokenVersion);
+
+            const token = jwt.sign(
+                {
+                    type: "USER",
+                    id: user.id,
+                    tokenVersion: newTokenVersion
+                },
+                process.env.JWT_SECRET,
+                {
+                    expiresIn: "7D"
+                }
+            );
+
             return res.status(200).send({
 
                 success: true,
                 message: 'Successfully Logged In.',
+                token: token,
                 data: {
                     user_id: user.id,
                     firstname: user.firstname,
@@ -232,6 +271,29 @@ const login = async (req, res) => {
 const dashboard = async (req, res) => {
     try {
 
+         // =====================================
+        // GUEST USER
+        // =====================================
+
+        if (req.user.type === "GUEST") {
+
+            return res.status(200).send({
+                success: true,
+                message: "Guest dashboard data",
+                userType: "GUEST",
+                data: {
+                    user_id: null,
+                    firstname: "Guest",
+                    lastname: "",
+                    logintype: "GUEST",
+                    emailid: "",
+                    mobileno: ""
+                }
+            });
+        }
+
+
+
         const { id } = req.body;
 
         if (!id) {
@@ -254,6 +316,7 @@ const dashboard = async (req, res) => {
 
                 success: true,
                 message: 'Successfully Logged In.',
+                userType: "USER",
                 data: {
                     user_id: user.id,
                     firstname: user.firstname,
@@ -279,6 +342,45 @@ const dashboard = async (req, res) => {
         })
     }
 }
+
+
+
+const createGuestToken = async (req, res) => {
+    try {
+
+        const guestId = crypto.randomUUID();
+
+        const token = jwt.sign(
+            {
+                type: "GUEST",
+                guestId: guestId
+            },
+            process.env.JWT_SECRET,
+            {
+                expiresIn: "10m"
+            }
+        );
+
+        return res.status(200).json({
+            success: true,
+            message: "Guest token generated successfully",
+            token: token,
+            data: {
+                guestId: guestId,
+                type: "GUEST"
+            }
+        });
+
+    } catch (error) {
+
+        console.error("Guest Token Error:", error);
+
+        return res.status(500).json({
+            success: false,
+            message: "Error generating guest token"
+        });
+    }
+};
 
 function getIndianDateTime() {
     const now = new Date();
@@ -436,6 +538,39 @@ const getUsertype = async (req, res) => {
         res.status(500).send({
             success: false,
             message: 'Error in get all series type API',
+            error
+        })
+    }
+}
+
+
+
+const insertAds = async (req, res) => {
+    try {
+        const { bannerads, interstitialsads, native, appopen } = req.body
+
+
+        const data = await db.query(
+            `INSERT INTO tblads ( bannerads, interstitialads, native, appopen )  
+            VALUES ($1, $2, $3, $4)`,
+            [bannerads, interstitialsads, native, appopen])
+
+        if (!data) {
+            return res.status(404).send({
+                success: false,
+                message: 'Error in insert query'
+            })
+        }
+
+        res.status(202).send({
+            success: true,
+            message: 'Successfully Inserted.'
+        })
+    } catch (error) {
+        console.log(error)
+        res.status(500).send({
+            success: false,
+            message: 'Error in create User Type API',
             error
         })
     }
@@ -656,11 +791,11 @@ const getAllSeries = async (req, res) => {
 
         const { seriesid, seriestype } = req.body;
 
-    
+
         let query = "SELECT * FROM tblseries WHERE 1=1";
         let values = [];
 
-         // Series ID
+        // Series ID
         if (seriesid !== undefined && seriesid !== null && seriesid !== "") {
             query += ` AND id = $${values.length + 1}`;
             values.push(seriesid);
@@ -1278,7 +1413,7 @@ const getSchedule = async (req, res) => {
 
         console.log("Body Data:", req.body); // 🔍 Debug
 
-        const { seriesid, matchFormat, seriesname, teamName1, teamName2 } = req.body;
+        const { id, seriesid, matchFormat, seriesname, teamName1, teamName2 } = req.body;
 
         // दोनों handle (typo + correct)
         const format = matchFormat;
@@ -1286,6 +1421,12 @@ const getSchedule = async (req, res) => {
 
         let query = "SELECT * FROM tblschedule WHERE 1=1";
         let values = [];
+
+         // Series ID Filter
+        if (id) {
+            query += ` AND id = $${values.length + 1}`;
+            values.push(id);
+        }
 
         // Series ID Filter
         if (seriesid) {
@@ -1346,9 +1487,202 @@ const getSchedule = async (req, res) => {
 }
 
 
+const addMatchView = async (req, res) => {
+    try {
+
+        const { matchId, guestId } = req.body;
+
+        if (!matchId) {
+            return res.status(400).json({
+                success: false,
+                message: "Match ID is required"
+            });
+        }
+
+        console.log("req.user:", req.user);
+
+        const scheduleResult = await db.query(
+            `SELECT id
+             FROM tblschedule
+             WHERE id = $1
+             LIMIT 1`,
+            [matchId]
+        );
+
+        if (scheduleResult.rows.length === 0) {
+            return res.status(404).json({
+                success: false,
+                message: "Schedule not found"
+            });
+        }
+
+
+        // =====================================
+        // LOGIN USER
+        // =====================================
+
+        if (req.user && req.user.type === "USER") {
+
+            const userId = req.user.id;
+
+            console.log("Logged in User ID:", userId);
+
+            const existingView = await db.query(
+                `SELECT id
+                 FROM match_screen_views
+                 WHERE match_id = $1
+                 AND user_id = $2
+                 LIMIT 1`,
+                [matchId, userId]
+            );
+
+            if (existingView.rows.length > 0) {
+                return res.status(200).json({
+                    success: true,
+                    counted: false,
+                    userType: "USER",
+                    message: "Already viewed"
+                });
+            }
+
+            await db.query(
+                `INSERT INTO match_screen_views
+                    (match_id, user_id)
+                 VALUES ($1, $2)`,
+                [matchId, userId]
+            );
+
+            return res.status(200).json({
+                success: true,
+                counted: true,
+                userType: "USER",
+                message: "View counted"
+            });
+        }
+
+        // =====================================
+        // GUEST USER
+        // =====================================
+
+        if (!guestId) {
+            return res.status(400).json({
+                success: false,
+                message: "Guest ID is required"
+            });
+        }
+
+        const existingGuestView = await db.query(
+            `SELECT id
+             FROM match_screen_views
+             WHERE match_id = $1
+             AND guest_id = $2
+             LIMIT 1`,
+            [matchId, guestId]
+        );
+
+        if (existingGuestView.rows.length > 0) {
+            return res.status(200).json({
+                success: true,
+                counted: false,
+                userType: "GUEST",
+                message: "Already viewed"
+            });
+        }
+
+        await db.query(
+            `INSERT INTO match_screen_views
+                (match_id, guest_id)
+             VALUES ($1, $2)`,
+            [matchId, guestId]
+        );
+
+        return res.status(200).json({
+            success: true,
+            counted: true,
+            userType: "GUEST",
+            message: "View counted"
+        });
+
+    } catch (error) {
+
+        console.error("Match View Error:", error);
+
+        return res.status(500).json({
+            success: false,
+            message: "Error in match view API",
+            error: error.message
+        });
+    }
+};
+
+const getScheduleViewCount = async (req, res) => {
+    try {
+
+         const { scheduleId } = req.body;
+
+        if (!scheduleId) {
+            return res.status(400).json({
+                success: false,
+                message: "Schedule ID is required"
+            });
+        }
+
+        // Check schedule exists
+        const scheduleResult = await db.query(
+            `SELECT id
+             FROM tblschedule
+             WHERE id = $1
+             LIMIT 1`,
+            [scheduleId]
+        );
+
+        if (scheduleResult.rows.length === 0) {
+            return res.status(404).json({
+                success: false,
+                message: "Schedule not found"
+            });
+        }
+
+        // Get view counts
+        const viewResult = await db.query(
+            `SELECT
+                COUNT(*)::INTEGER AS total_views,
+                COUNT(user_id)::INTEGER AS user_views,
+                COUNT(guest_id)::INTEGER AS guest_views
+             FROM match_screen_views
+             WHERE match_id = $1`,
+            [scheduleId]
+        );
+
+        const views = viewResult.rows[0];
+
+        return res.status(200).json({
+            success: true,
+            message: "View count fetched successfully",
+            data: {
+                scheduleId: Number(scheduleId),
+                totalViews: views.total_views,
+                userViews: views.user_views,
+                guestViews: views.guest_views
+            }
+        });
+
+    } catch (error) {
+
+        console.error("Get Schedule View Count Error:", error);
+
+        return res.status(500).json({
+            success: false,
+            message: "Error in get schedule view count API",
+            error: error.message
+        });
+    }
+};
+
+
 
 export {
     createUser, getAllUsers, login, dashboard, Usertype, getUsertype, deleteUsertype, series, getAllSeries, deleteAllSeries, Seriestype,
     getSeriestype, deleteSeriestype, MatchFormat, deleteMatchFormat, getMatchFormat, schedules, getSchedule, updateTossStatus, ContactUS,
-    getAllAds
+    getAllAds, insertAds, createGuestToken, addMatchView, getScheduleViewCount
 }
