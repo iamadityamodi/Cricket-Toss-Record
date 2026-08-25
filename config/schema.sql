@@ -66,3 +66,12 @@ CREATE TABLE IF NOT EXISTS "tblContactUS" (
     message TEXT NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE TABLE IF NOT EXISTS match_votes (
+    id SERIAL PRIMARY KEY,
+    match_id INT NOT NULL,
+    team_id TEXT NOT NULL,
+    user_id INT DEFAULT NULL,
+    guest_id TEXT DEFAULT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);

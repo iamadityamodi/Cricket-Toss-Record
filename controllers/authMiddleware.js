@@ -43,8 +43,7 @@ const authenticateToken = async (req, res, next) => {
             process.env.JWT_SECRET
         );
 
-        console.log("Decoded JWT:", decoded);
-
+ 
         // =================================
         // GUEST USER
         // =================================
@@ -91,15 +90,7 @@ const authenticateToken = async (req, res, next) => {
             const currentTokenVersion =
                 result.rows[0].token_version;
 
-            console.log(
-                "Current Token Version:",
-                currentTokenVersion
-            );
-
-            console.log(
-                "Decoded Token Version:",
-                decoded.tokenVersion
-            );
+            
 
             // --------------------------------
             // Check old login token
