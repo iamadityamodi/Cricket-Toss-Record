@@ -40,7 +40,7 @@ const authenticateToken = async (req, res, next) => {
 
         const decoded = jwt.verify(
             token,
-            process.env.JWT_SECRET
+            process.env.JWT_SECRET || "crictoss_super_secret_jwt_key_2026"
         );
 
  

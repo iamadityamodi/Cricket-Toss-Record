@@ -222,23 +222,23 @@ const login = async (req, res) => {
             const newTokenVersion = versionResult.rows[0].token_version;
 
 
-            // const token = jwt.sign(
-            //     {
-            //         type: "USER",
-            //         id: user.id,
-            //         tokenVersion: newTokenVersion
-            //     },
-            //     process.env.JWT_SECRET,
-            //     {
-            //         expiresIn: "7D"
-            //     }
-            // );
+            const token = jwt.sign(
+                {
+                    type: "USER",
+                    id: user.id,
+                    tokenVersion: newTokenVersion
+                },
+                process.env.JWT_SECRET || "crictoss_super_secret_jwt_key_2026",
+                {
+                    expiresIn: "7D"
+                }
+            );
 
             return res.status(200).send({
 
                 success: true,
                 message: 'Successfully Logged In.',
-                // token: token,
+                token: token,
                 data: {
                     user_id: user.id,
                     firstname: user.firstname,
@@ -297,7 +297,7 @@ const saveFcmToken = async (req, res) => {
             });
         }
 
-        console.log("userType",userType)
+        console.log("userType", userType)
 
         // =========================
         // GUEST
@@ -513,15 +513,15 @@ const dashboard = async (req, res) => {
 
 const createGuestToken = async (req, res) => {
     try {
-
         const guestId = crypto.randomUUID();
+        const jwtSecret = process.env.JWT_SECRET || "crictoss_super_secret_jwt_key_2026";
 
         const token = jwt.sign(
             {
                 type: "GUEST",
                 guestId: guestId
             },
-            process.env.JWT_SECRET,
+            jwtSecret,
             {
                 expiresIn: "7D"
             }
@@ -538,11 +538,11 @@ const createGuestToken = async (req, res) => {
         });
 
     } catch (error) {
-
-
+        console.error("Guest Token Error:", error);
         return res.status(500).json({
             success: false,
-            message: "Error generating guest token"
+            message: "Error generating guest token",
+            error: error.message || error
         });
     }
 };
@@ -1149,8 +1149,6 @@ const series = async (req, res) => {
 const getAllSeries = async (req, res) => {
     try {
 
-
-
         const { seriesid, seriestype } = req.body;
 
 
@@ -1158,7 +1156,9 @@ const getAllSeries = async (req, res) => {
         let values = [];
 
         // Series ID
-        if (seriesid !== undefined && seriesid !== null && seriesid !== "") {
+        if (seriesid !== undefined &&
+            seriesid !== null &&
+            seriesid !== "") {
             query += ` AND id = $${values.length + 1}`;
             values.push(seriesid);
         }
@@ -1186,19 +1186,19 @@ const getAllSeries = async (req, res) => {
             });
         }
 
-        res.status(200).send({
+        return res.status(200).send({
             success: true,
-            message: 'Success......',
+            message: 'Success',
             data: data,
         });
 
     } catch (error) {
-
-        res.status(500).send({
+        console.error("Error in getAllSeries API:", error);
+        return res.status(500).send({
             success: false,
-            message: 'Error in Get All Student API',
-            error
-        })
+            message: 'Error in get all series API',
+            error: error.message || error
+        });
     }
 }
 
@@ -1891,6 +1891,7 @@ const sendGuestTossNotification = async ({
     const response =
         await messaging.sendEachForMulticast(firebaseMessage);
 
+    console.log("response", response);
 
 
     // Invalid tokens deactivate
@@ -2817,7 +2818,14 @@ const getBothTeamsLast5MatchToss = async (req, res) => {
             const tossWins = matches.filter(m => m.isTossWon).length;
             const tossLosses = totalMatches - tossWins;
             const winPercentage = totalMatches > 0 ? parseFloat(((tossWins / totalMatches) * 100).toFixed(2)) : 0;
-            const form = matches.map(m => (m.isTossWon ? "W" : "L"));
+            // const form = matches.map(m => (m.isTossWon ? "W" : "L"));
+            const form = matches.map(m => {
+                const tossStatus = m.isTossWon ? "W" : "L"
+                return {
+                    tossStatus: tossStatus,
+
+                };
+            });
 
             return {
                 teamId: Number(teamId),

@@ -19,4 +19,4 @@ const firebaseApp = initializeApp({
 
 export const messaging = getMessaging(firebaseApp);
 
-console.log("Firebase initialized successfully");
+ 
