@@ -222,23 +222,23 @@ const login = async (req, res) => {
             const newTokenVersion = versionResult.rows[0].token_version;
 
 
-            const token = jwt.sign(
-                {
-                    type: "USER",
-                    id: user.id,
-                    tokenVersion: newTokenVersion
-                },
-                process.env.JWT_SECRET,
-                {
-                    expiresIn: "7D"
-                }
-            );
+            // const token = jwt.sign(
+            //     {
+            //         type: "USER",
+            //         id: user.id,
+            //         tokenVersion: newTokenVersion
+            //     },
+            //     process.env.JWT_SECRET,
+            //     {
+            //         expiresIn: "7D"
+            //     }
+            // );
 
             return res.status(200).send({
 
                 success: true,
                 message: 'Successfully Logged In.',
-                token: token,
+                // token: token,
                 data: {
                     user_id: user.id,
                     firstname: user.firstname,
