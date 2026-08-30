@@ -3,14 +3,14 @@ name: Deploy to Cloud Run
 on:
   push:
     branches:
-      - main
+      - main-update
 
 env:
   PROJECT_ID: pivotal-canto-478409-u3
-  SERVICE_NAME: ctr
+  SERVICE_NAME: ctr-staging
   REGION: us-central1
   REPOSITORY: us-central1-docker.pkg.dev/pivotal-canto-478409-u3/container
-  IMAGE_NAME: ctr
+  IMAGE_NAME: ctr-staging
 
 jobs:
   deploy:
