@@ -1888,6 +1888,11 @@ const sendGuestTossNotification = async ({
         tokens: tokens
     };
 
+    if (!messaging) {
+        console.warn("Firebase messaging not initialized, skipping notification.");
+        return;
+    }
+
     const response =
         await messaging.sendEachForMulticast(firebaseMessage);
 

@@ -36,6 +36,13 @@ const SendNotification = async (req, res) => {
             }
         };
 
+        if (!messaging) {
+            return res.status(500).json({
+                success: false,
+                message: "Firebase messaging not initialized"
+            });
+        }
+
         const response = await messaging.send(message);
 
         return res.status(200).json({
