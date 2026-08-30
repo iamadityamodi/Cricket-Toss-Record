@@ -1188,7 +1188,7 @@ const getAllSeries = async (req, res) => {
 
         return res.status(200).send({
             success: true,
-            message: 'Success',
+            message: 'Success Get All Seiries.',
             data: data,
         });
 
