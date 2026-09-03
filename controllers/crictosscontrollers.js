@@ -1014,7 +1014,7 @@ const series = async (req, res) => {
 
 
     try {
-        const { id, seriesname, seriestype, betStartTime, betEndTime, userZone } = req.body
+        const { id, seriesname, seriestype, betStartTime, betEndTime, userZone, isNotify } = req.body
 
         if (!seriesname) {
             return res.status(500).send({
@@ -1037,6 +1037,28 @@ const series = async (req, res) => {
                 message: 'Please select betEndTime'
             })
         }
+
+        let notify = false;
+
+        if (isNotify !== undefined && isNotify !== null) {
+
+            if (typeof isNotify === "boolean") {
+                notify = isNotify;
+            }
+            else if (isNotify === "true") {
+                notify = true;
+            }
+            else if (isNotify === "false") {
+                notify = false;
+            }
+            else {
+                return res.status(400).json({
+                    success: false,
+                    message: "isNotify must be true or false"
+                });
+            }
+        }
+
 
         const zone = userZone || "Asia/Kolkata";
 
@@ -1096,13 +1118,16 @@ const series = async (req, res) => {
                 seriestype = $2,
                 betStartTime = $3,
                 betEndTime = $4,
-                updated_date = $5
-             WHERE id = $6`,
+                 "isnotify" = $5,
+                updated_date = $6
+
+             WHERE id = $7`,
                 [
                     seriesname,
                     seriestype,
                     StartTime,
                     EndUTime,
+                    notify,
                     betStartUTC,
                     id
                 ]
@@ -1122,11 +1147,11 @@ const series = async (req, res) => {
         await db.query(
             `INSERT INTO tblseries
         (seriesname, seriestype, betStartTime, betEndTime,
-         created_date, updated_date)
-         VALUES ($1, $2, $3, $4, $5, $6)`,
+         created_date, updated_date,"isnotify")
+         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
             [
 
-                seriesname, seriestype, StartTime, EndUTime, betStartUTC, null
+                seriesname, seriestype, StartTime, EndUTime, betStartUTC, null, notify
             ]
         );
 
@@ -1490,14 +1515,16 @@ const schedules = async (req, res) => {
 
         // Get Series name
         const { rows: seriesdata } = await connection.query(
-            "SELECT seriesname FROM tblseries WHERE id = $1",
+            "SELECT seriesname, isnotify FROM tblseries WHERE id = $1",
             [seriesid]
         );
 
 
         let newSeriesName = null
+        let notify = false;
         if (seriesdata.length > 0) {
             newSeriesName = seriesdata[0].seriesname;
+            notify = seriesdata[0].isnotify;
         } else {
             return res.status(500).send({
                 success: false,
@@ -1629,8 +1656,9 @@ const schedules = async (req, res) => {
             teamid2 = $9,   
             teamName2 = $10,
             updateddate = $11,
-            matchno = $12
-         WHERE id = $13`,
+            matchno = $12,
+            isnotify = $13
+         WHERE id = $14`,
                 [
                     seriesid, newSeriesName,
                     matchFormatid, newMatchFormatName,
@@ -1638,7 +1666,7 @@ const schedules = async (req, res) => {
                     teamid1, newTeam1Name,
                     teamid2, newTeam2Name,
                     createdTimeUTC, matchno,
-                    id
+                    notify, id
                 ]
             );
 
@@ -1659,7 +1687,7 @@ const schedules = async (req, res) => {
             teamName1,teamName2,
             tosswonstatus,tossstatus,
             createddate,updateddate,
-            matchno
+            matchno, isnotify
         )
         VALUES
         (
@@ -1670,7 +1698,7 @@ const schedules = async (req, res) => {
             $9,$10,
             $11,$12,
             $13, $14,
-            $15
+            $15, $16
         )`,
                 [
                     seriesid, newSeriesName,
@@ -1680,7 +1708,7 @@ const schedules = async (req, res) => {
                     newTeam1Name, newTeam2Name,
                     null, false,
                     createdTimeUTC, null,
-                    matchno
+                    matchno,notify
                 ]
             );
 
@@ -1713,30 +1741,19 @@ const updateTossStatus = async (req, res) => {
     try {
         connection = await db.connect();
 
-        const { id, teamid, tossdeccide } = req.body;
+        const { id, teamid, tossdeccide, isAbandoned, abandonReason } = req.body || {};
 
         if (!id) {
             return res.status(400).json({
                 success: false,
                 message: "Please enter match id"
             });
-        } else if (!teamid) {
-            return res.status(400).json({
-                success: false,
-                message: "Please select team name"
-            });
-        } else if (!tossdeccide) {
-            return res.status(400).json({
-                success: false,
-                message: "Please select toss decide bat or bowl"
-            });
         }
 
         await connection.query("BEGIN");
 
-        // ✅ Check if already completed
+        // ✅ Check if match exists
         const { rows: checkStatus } = await connection.query(
-
             "SELECT * FROM tblschedule WHERE id = $1",
             [id]
         );
@@ -1749,52 +1766,101 @@ const updateTossStatus = async (req, res) => {
             });
         }
 
+        const match = checkStatus[0];
+        const seriesid = match.seriesid;
+
+        // Check if match is marked as abandoned
+        const cleanDecide = (tossdeccide || "").trim().toLowerCase();
+        const isMatchAbandoned = isAbandoned === true || isAbandoned === "true" || cleanDecide === "abandoned" || cleanDecide === "abandon" || cleanDecide === "cancelled" || cleanDecide === "no result";
+
+        if (isMatchAbandoned) {
+            const abandonStatusText = abandonReason || "Match Abandoned";
+
+            await connection.query(
+                `UPDATE tblschedule 
+                 SET tosswinnerid = NULL,
+                     tosswonstatus = $1,
+                     tossstatus = true,
+                     updateddate = NOW() AT TIME ZONE 'UTC'
+                 WHERE id = $2`,
+                [abandonStatusText, id]
+            );
+
+            await connection.query("COMMIT");
+
+            await sendGuestTossNotification({
+                matchId: id,
+                teamId: null,
+                seriesId: seriesid,
+                message: abandonStatusText
+            });
+
+            return res.status(200).json({
+                success: true,
+                message: "Match marked as abandoned successfully",
+                data: {
+                    id,
+                    isAbandoned: true,
+                    tosswonstatus: abandonStatusText
+                }
+            });
+        }
+
+        // Standard Toss Update Flow
+        if (!teamid) {
+            await connection.query("ROLLBACK");
+            return res.status(400).json({
+                success: false,
+                message: "Please select team name"
+            });
+        } else if (!tossdeccide) {
+            await connection.query("ROLLBACK");
+            return res.status(400).json({
+                success: false,
+                message: "Please select toss decide bat or bowl"
+            });
+        }
+
         const { rows: checkTeam } = await db.query(
             `SELECT id FROM teams WHERE id = $1`,
             [teamid]
         );
 
         if (checkTeam.length === 0) {
+            await connection.query("ROLLBACK");
             return res.status(404).json({
                 success: false,
                 message: "Team not found"
             });
         }
 
-
         let tossWonTeamName;
-
-        const match = checkStatus[0];
-
-
-        const seriesid = match.seriesid;
 
         if (Number(teamid) === Number(match.teamid1)) {
             tossWonTeamName = match.teamname1;
         } else if (Number(teamid) === Number(match.teamid2)) {
             tossWonTeamName = match.teamname2;
         } else {
+            await connection.query("ROLLBACK");
             return res.status(400).json({
                 success: false,
-                message: "Invalid toss team"
+                message: "Invalid toss team for this match"
             });
         }
 
+        const thisteamwon = tossWonTeamName + " won the toss and opt to " + tossdeccide;
 
-        const thisteamwon =
-            tossWonTeamName + " won the toss and opt to " + tossdeccide;
         await connection.query(
             `UPDATE tblschedule 
-     SET tosswinnerid = $1,
-         tosswonstatus = $2,
-         tossstatus = true,
-         updateddate = NOW() AT TIME ZONE 'UTC'
-     WHERE id = $3`,
+             SET tosswinnerid = $1,
+                 tosswonstatus = $2,
+                 tossstatus = true,
+                 updateddate = NOW() AT TIME ZONE 'UTC'
+             WHERE id = $3`,
             [teamid, thisteamwon, id]
         );
+
         await connection.query("COMMIT");
-
-
 
         await sendGuestTossNotification({
             matchId: id,
@@ -1802,9 +1868,6 @@ const updateTossStatus = async (req, res) => {
             seriesId: seriesid,
             message: thisteamwon
         });
-
-
-
 
         return res.status(200).json({
             success: true,
@@ -1818,24 +1881,20 @@ const updateTossStatus = async (req, res) => {
             }
         });
 
-
-
     } catch (error) {
-
         if (connection) {
             try {
                 await connection.query("ROLLBACK");
             } catch (e) { }
         }
-        res.status(500).send({
+        return res.status(500).send({
             success: false,
-            message: 'Error in Get All Student API',
-            error
-        })
+            message: 'Error updating toss status',
+            error: error.message || error
+        });
     } finally {
         if (connection) connection.release();
     }
-
 }
 
 const sendGuestTossNotification = async ({
@@ -2363,6 +2422,10 @@ const getUpdatedTossRecords = async (req, res) => {
     }
 };
 
+
+// https://crickettossrecord.com/app-ads.txt
+// https://www.crickettossrecord.com/app-ads.txt
+
 const ensureMatchVotesTableExists = async () => {
     try {
         await db.query(`
@@ -2795,11 +2858,19 @@ const getBothTeamsLast5MatchToss = async (req, res) => {
                 const opponentTeamId = isTeam1 ? m.teamid2 : m.teamid1;
                 const opponentTeamName = isTeam1 ? m.teamname2 : m.teamname1;
 
+                const isAbandonedMatch = m.tosswonstatus && m.tosswonstatus.toLowerCase().includes("abandon");
+
                 let isTossWon = false;
-                if (m.tosswinnerid !== null && m.tosswinnerid !== undefined) {
+                let tossResult = "LOST";
+
+                if (isAbandonedMatch) {
+                    tossResult = "ABANDONED";
+                } else if (m.tosswinnerid !== null && m.tosswinnerid !== undefined) {
                     isTossWon = Number(m.tosswinnerid) === Number(teamId);
+                    tossResult = isTossWon ? "WON" : "LOST";
                 } else if (m.tosswonstatus && teamName) {
                     isTossWon = m.tosswonstatus.toLowerCase().includes(teamName.toLowerCase());
+                    tossResult = isTossWon ? "WON" : "LOST";
                 }
 
                 return {
@@ -2815,20 +2886,24 @@ const getBothTeamsLast5MatchToss = async (req, res) => {
                     tossWinnerId: m.tosswinnerid ? Number(m.tosswinnerid) : null,
                     tossWonStatus: m.tosswonstatus,
                     isTossWon: isTossWon,
-                    tossResult: isTossWon ? "WON" : "LOST"
+                    isAbandoned: isAbandonedMatch || false,
+                    tossResult: tossResult
                 };
             });
 
             const totalMatches = matches.length;
             const tossWins = matches.filter(m => m.isTossWon).length;
-            const tossLosses = totalMatches - tossWins;
-            const winPercentage = totalMatches > 0 ? parseFloat(((tossWins / totalMatches) * 100).toFixed(2)) : 0;
-            // const form = matches.map(m => (m.isTossWon ? "W" : "L"));
+            const abandonedMatchesCount = matches.filter(m => m.isAbandoned).length;
+            const tossLosses = totalMatches - tossWins - abandonedMatchesCount;
+            const validMatches = totalMatches - abandonedMatchesCount;
+            const winPercentage = validMatches > 0 ? parseFloat(((tossWins / validMatches) * 100).toFixed(2)) : 0;
             const form = matches.map(m => {
-                const tossStatus = m.isTossWon ? "W" : "L"
+                let tossStatus = m.isTossWon ? "W" : "L";
+                if (m.isAbandoned) {
+                    tossStatus = "A";
+                }
                 return {
-                    tossStatus: tossStatus,
-
+                    tossStatus: tossStatus
                 };
             });
 
