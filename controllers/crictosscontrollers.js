@@ -527,6 +527,8 @@ const createGuestToken = async (req, res) => {
             }
         );
 
+        console.log(token);
+
         return res.status(200).json({
             success: true,
             message: "Guest token generated successfully",
@@ -1708,7 +1710,7 @@ const schedules = async (req, res) => {
                     newTeam1Name, newTeam2Name,
                     null, false,
                     createdTimeUTC, null,
-                    matchno,notify
+                    matchno, notify
                 ]
             );
 
@@ -1862,12 +1864,15 @@ const updateTossStatus = async (req, res) => {
 
         await connection.query("COMMIT");
 
+        console.log("Toss updated successfully for match ID:", id, "Team ID:", teamid, "Toss Decision:", tossdeccide);
+
         await sendGuestTossNotification({
             matchId: id,
             teamId: teamid,
             seriesId: seriesid,
             message: thisteamwon
         });
+
 
         return res.status(200).json({
             success: true,
@@ -1916,6 +1921,10 @@ const sendGuestTossNotification = async ({
 
     const tokens = rows.map(row => row.fcm_token);
 
+    
+    console.log("tokens:", tokens);
+
+
     if (tokens.length === 0) {
         return;
     }
@@ -1952,36 +1961,49 @@ const sendGuestTossNotification = async ({
         return;
     }
 
-    const response =
-        await messaging.sendEachForMulticast(firebaseMessage);
+    console.log("========== PUSH START ==========");
+    console.log("FCM TOKEN:", tokens);
 
-    console.log("response", response);
+    try {
+        const response =
+            await messaging.sendEachForMulticast(firebaseMessage);
+
+        console.log("========== FCM SUCCESS ==========");
+        console.log(response);
 
 
-    // Invalid tokens deactivate
-    response.responses.forEach(async (result, index) => {
 
-        if (!result.success) {
+        // Invalid tokens deactivate
+        response.responses.forEach(async (result, index) => {
 
-            const errorCode = result.error?.code;
+            if (!result.success) {
 
-            if (
-                errorCode ===
-                "messaging/registration-token-not-registered"
-            ) {
+                const errorCode = result.error?.code;
 
-                const invalidToken = tokens[index];
+                if (
+                    errorCode ===
+                    "messaging/registration-token-not-registered"
+                ) {
 
-                await db.query(`
+                    const invalidToken = tokens[index];
+
+                    await db.query(`
                     UPDATE fcm_tokens
                     SET is_active = false,
                         updated_at = CURRENT_TIMESTAMP
                     WHERE fcm_token = $1
                 `, [invalidToken]);
 
+                }
             }
-        }
-    });
+        });
+    } catch (error) {
+        console.error("========== FCM ERROR ==========");
+        console.error("CODE:", error.code);
+        console.error("MESSAGE:", error.message);
+    }
+
+
 };
 
 const getSchedule = async (req, res) => {
