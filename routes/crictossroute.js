@@ -45,7 +45,7 @@ router.post("/last-5-match-toss", authenticateToken, getBothTeamsLast5MatchToss)
 router.post("/updateTossStatus", authenticateToken, updateTossStatus);
 
 // Match Voting
-router.post("/match-vote", authenticateToken, submitMatchVote);
+router.post("/submitMatchVote", authenticateToken, submitMatchVote);
 router.post("/getMatchVoteResults", authenticateToken, getMatchVoteResults);
 router.post("/getCurrentMatchesVoting", authenticateToken, getCurrentMatchesVoting);
 
