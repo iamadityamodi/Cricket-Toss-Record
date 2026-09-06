@@ -265,6 +265,8 @@ const login = async (req, res) => {
         })
     }
 }
+
+
 const saveFcmToken = async (req, res) => {
 
     try {
@@ -273,7 +275,8 @@ const saveFcmToken = async (req, res) => {
             fcmToken,
             userType,
             userId,
-            guestId
+            guestId,
+            devicename
         } = req.body;
 
         if (!fcmToken) {
@@ -1016,7 +1019,7 @@ const series = async (req, res) => {
 
 
     try {
-        const { id, seriesname, seriestype, betStartTime, betEndTime, userZone, isNotify } = req.body
+        const { id, seriesname, seriestype, startTime, endTime, userZone, isNotify } = req.body
 
         if (!seriesname) {
             return res.status(500).send({
@@ -1028,15 +1031,15 @@ const series = async (req, res) => {
                 success: false,
                 message: 'Please select seriestype'
             })
-        } else if (!betStartTime) {
+        } else if (!startTime) {
             return res.status(500).send({
                 success: false,
-                message: 'Please select betStartTime'
+                message: 'Please select startTime'
             })
-        } else if (!betEndTime) {
+        } else if (!endTime) {
             return res.status(500).send({
                 success: false,
-                message: 'Please select betEndTime'
+                message: 'Please select endTime'
             })
         }
 
@@ -1072,25 +1075,25 @@ const series = async (req, res) => {
             "YYYY-MM-DDTHH:mm:ss.SSSZ"
         ];
 
-        const betStartUser = moment.tz(betStartTime, formats, zone);
-        const betEndUser = moment.tz(betEndTime, formats, zone);
+        const startSeries = moment.tz(startTime, formats, zone);
+        const endSeries = moment.tz(endTime, formats, zone);
 
-        if (!betStartUser.isValid()) {
+        if (!startSeries.isValid()) {
             return res.status(400).json({
                 success: false,
                 message: "Invalid date format OF statdate"
             });
         }
 
-        if (!betEndUser.isValid()) {
+        if (!endSeries.isValid()) {
             return res.status(400).json({
                 success: false,
                 message: "Invalid date format enddate"
             });
         }
 
-        const EndUTime = betEndUser.utc().format("YYYY-MM-DD HH:mm:ss");
-        const StartTime = betStartUser.utc().format("YYYY-MM-DD HH:mm:ss");
+        const EndUTime = endSeries.utc().format("YYYY-MM-DD HH:mm:ss");
+        const StartTime = startSeries.utc().format("YYYY-MM-DD HH:mm:ss");
 
         const betStartUTC = DateTime.utc().toSQL({ includeOffset: false });
 
@@ -1770,6 +1773,9 @@ const updateTossStatus = async (req, res) => {
 
         const match = checkStatus[0];
         const seriesid = match.seriesid;
+        const isnotify = match.isnotify;
+
+
 
         // Check if match is marked as abandoned
         const cleanDecide = (tossdeccide || "").trim().toLowerCase();
@@ -1790,12 +1796,33 @@ const updateTossStatus = async (req, res) => {
 
             await connection.query("COMMIT");
 
-            await sendGuestTossNotification({
-                matchId: id,
-                teamId: null,
-                seriesId: seriesid,
-                message: abandonStatusText
-            });
+            let notify = false;
+
+            if (isnotify !== undefined && isnotify !== null) {
+
+                if (typeof isnotify === "boolean") {
+                    notify = isnotify;
+                }
+                else if (isnotify === "true") {
+                    notify = true;
+                }
+                else if (isnotify === "false") {
+                    notify = false;
+                }
+            }
+
+            console.log("Match marked as abandoned for match ID:", id, "Abandon Reason:", abandonStatusText, "Notify:", notify);
+
+
+            // Send notification only if notify is true
+            if (notify === true) {
+                await sendGuestTossNotification({
+                    matchId: id,
+                    teamId: null,
+                    seriesId: seriesid,
+                    message: abandonStatusText
+                });
+            }
 
             return res.status(200).json({
                 success: true,
@@ -1837,11 +1864,17 @@ const updateTossStatus = async (req, res) => {
         }
 
         let tossWonTeamName;
+        let team1;
+        let team2;
 
         if (Number(teamid) === Number(match.teamid1)) {
             tossWonTeamName = match.teamname1;
+            team1 = match.teamname1;
+            team2 = match.teamname2;
         } else if (Number(teamid) === Number(match.teamid2)) {
             tossWonTeamName = match.teamname2;
+            team1 = match.teamname1;
+            team2 = match.teamname2;
         } else {
             await connection.query("ROLLBACK");
             return res.status(400).json({
@@ -1851,6 +1884,9 @@ const updateTossStatus = async (req, res) => {
         }
 
         const thisteamwon = tossWonTeamName + " won the toss and opt to " + tossdeccide;
+        // const macthStatus = "Please Check Toss Update "+team1 + " V/s " + team2;
+        const macthStatus = "Check Who Won The Toss In This Match";
+        const bothTeamName = team1 + " V/s " + team2;
 
         await connection.query(
             `UPDATE tblschedule 
@@ -1866,12 +1902,38 @@ const updateTossStatus = async (req, res) => {
 
         console.log("Toss updated successfully for match ID:", id, "Team ID:", teamid, "Toss Decision:", tossdeccide);
 
-        await sendGuestTossNotification({
-            matchId: id,
-            teamId: teamid,
-            seriesId: seriesid,
-            message: thisteamwon
-        });
+        let notify = false;
+
+        if (isnotify !== undefined && isnotify !== null) {
+
+            if (typeof isnotify === "boolean") {
+                notify = isnotify;
+            }
+            else if (isnotify === "true") {
+                notify = true;
+            }
+            else if (isnotify === "false") {
+                notify = false;
+            }
+        }
+
+ 
+
+        // Send notification only if notify is true
+        if (notify === true) {
+            console.log("IsnOfity fi", isnotify)
+            await sendGuestTossNotification({
+                matchId: id,
+                teamId: teamid,
+                seriesId: seriesid,
+                message: macthStatus,
+                bothTeamName: bothTeamName
+            });
+        } else {
+            console.log("IsnOfity else ", isnotify)
+        }
+
+
 
 
         return res.status(200).json({
@@ -1906,7 +1968,8 @@ const sendGuestTossNotification = async ({
     matchId,
     teamId,
     seriesId,
-    message
+    message,
+    bothTeamName
 }) => {
 
     const { rows } = await db.query(`
@@ -1921,7 +1984,7 @@ const sendGuestTossNotification = async ({
 
     const tokens = rows.map(row => row.fcm_token);
 
-    
+
     console.log("tokens:", tokens);
 
 
@@ -1933,7 +1996,7 @@ const sendGuestTossNotification = async ({
 
     const firebaseMessage = {
         notification: {
-            title: "Toss Update",
+            title: bothTeamName,
             body: message
         },
 
@@ -1942,7 +2005,7 @@ const sendGuestTossNotification = async ({
             EXTRA_MATCH_ID: String(matchId),
             EXTRA_TEAM_ID: String(teamId),
             EXTRA_SERIES_ID: String(seriesId),
-            click_action: "RecordTossActivity"
+            click_action: "ViewTossRecordActivity"
         },
 
         android: {
@@ -2009,7 +2072,7 @@ const sendGuestTossNotification = async ({
 const getSchedule = async (req, res) => {
     try {
 
-        const { id, seriesid, matchFormat, seriesname, teamName1, teamName2 } = req.body;
+        const { id, seriesid, matchFormat, seriesname, teamid } = req.body;
 
         // दोनों handle (typo + correct)
         const format = matchFormat;
@@ -2040,14 +2103,11 @@ const getSchedule = async (req, res) => {
             values.push(seriesname);
         }
 
-        if (teamName1 && teamName1.trim() !== "") {
-            query += ` AND TRIM(LOWER(teamName1)) = TRIM(LOWER($${values.length + 1}))`;
-            values.push(teamName1);
-        }
-
-        if (teamName2 && teamName2.trim() !== "") {
-            query += ` AND TRIM(LOWER(teamName2)) = TRIM(LOWER($${values.length + 1}))`;
-            values.push(teamName2);
+        // SINGLE TEAM FILTER
+        // Team can be either teamid1 OR teamid2
+        if (teamid && teamid.toString().trim() !== "") {
+            query += ` AND (teamid1 = $${values.length + 1} OR teamid2 = $${values.length + 1})`;
+            values.push(teamid);
         }
 
         // ORDER BY MUST BE LAST
@@ -2275,49 +2335,127 @@ const getScheduleViewCount = async (req, res) => {
 
 const getNext10Matches = async (req, res) => {
     try {
-        console.log("Body Data for Next 10 Matches:", req.body);
+        console.log("Body / Query Data for Next 10 Matches:", { ...req.query, ...req.body });
+
+        const payload = { ...req.query, ...req.body };
 
         const {
             limit = 10,
-            upcomingOnly = true
-        } = req.body || {};
+            upcomingOnly = true,
+            startDate,
+            seriesid,
+            matchFormat,
+            format,
+            seriesname,
+            teamid,
+            teamid1,
+            teamid2,
+            tossstatus
+        } = payload || {};
 
-        const recordLimit = parseInt(limit, 10) || 10;
+        const recordLimit = Math.max(1, parseInt(limit, 10) || 10);
+        const matchFormatVal = matchFormat || format;
+        const isUpcomingOnly = upcomingOnly === true || upcomingOnly === 'true' || upcomingOnly === 1 || upcomingOnly === '1';
 
         let query = "SELECT * FROM tblschedule WHERE 1=1";
         let values = [];
 
-
-
-        if (upcomingOnly) {
-            query += ` AND startDate >= CURRENT_TIMESTAMP`;
+        // 1. Toss Status Filter: For upcoming matches, toss should not be done (tossstatus = false or NULL)
+        if (tossstatus !== undefined && tossstatus !== null && tossstatus !== '') {
+            values.push(tossstatus === true || tossstatus === 'true');
+            query += ` AND tossstatus = $${values.length}`;
+        } else if (isUpcomingOnly) {
+            query += ` AND (tossstatus IS FALSE OR tossstatus IS NULL)`;
         }
 
-        // ORDER BY startDate ASC, id ASC to get the chronological next matches
-        query += ` ORDER BY startDate ASC, id ASC LIMIT $${values.length + 1}`;
+        // 2. Date Filter: Fetch upcoming / future matches (starting from today onwards)
+        if (startDate) {
+            values.push(startDate);
+            query += ` AND startdate >= $${values.length}`;
+        } else if (isUpcomingOnly) {
+            // CURRENT_DATE includes all matches starting today (00:00:00) onwards
+            // CURRENT_DATE - INTERVAL '12 hours' catches matches starting earlier today whose toss is pending
+            query += ` AND (startdate >= (CURRENT_DATE - INTERVAL '12 hours') OR startdate IS NULL)`;
+        }
+
+        // 3. Optional Filters
+        if (seriesid) {
+            values.push(seriesid);
+            query += ` AND seriesid = $${values.length}`;
+        }
+
+        if (matchFormatVal && matchFormatVal.toString().trim() !== "") {
+            values.push(matchFormatVal);
+            query += ` AND TRIM(LOWER(matchFormat)) = TRIM(LOWER($${values.length}))`;
+        }
+
+        if (seriesname && seriesname.toString().trim() !== "") {
+            values.push(seriesname);
+            query += ` AND TRIM(LOWER(seriesname)) = TRIM(LOWER($${values.length}))`;
+        }
+
+        if (teamid && teamid.toString().trim() !== "") {
+            values.push(teamid);
+            query += ` AND (teamid1 = $${values.length} OR teamid2 = $${values.length})`;
+        }
+
+        if (teamid1 !== undefined && teamid1 !== null && teamid1 !== "") {
+            values.push(Number(teamid1));
+            query += ` AND teamid1 = $${values.length}`;
+        }
+
+        if (teamid2 !== undefined && teamid2 !== null && teamid2 !== "") {
+            values.push(Number(teamid2));
+            query += ` AND teamid2 = $${values.length}`;
+        }
+
+        // ORDER BY startdate ASC (soonest upcoming matches first), NULLS LAST, id ASC
         values.push(recordLimit);
+        query += ` ORDER BY startdate ASC NULLS LAST, id ASC LIMIT $${values.length}`;
 
         let { rows: data } = await db.query(query, values);
 
-        // Fallback: If no upcoming matches found using CURRENT_TIMESTAMP, fetch the next records by id ASC
-        if (data.length === 0 && upcomingOnly && !startDate) {
-            let fallbackQuery = "SELECT * FROM tblschedule WHERE 1=1";
+        // Fallback: If no matches found with today/future filter (e.g. if database only has test data),
+        // fetch uncompleted matches (tossstatus = false) ordered by startdate DESC / id DESC so the latest pending matches show.
+        if (data.length === 0 && isUpcomingOnly && !startDate) {
+            let fallbackQuery = "SELECT * FROM tblschedule WHERE (tossstatus IS FALSE OR tossstatus IS NULL)";
             let fallbackValues = [];
 
             if (seriesid) {
-                fallbackQuery += ` AND seriesid = $${fallbackValues.length + 1}`;
                 fallbackValues.push(seriesid);
-            }
-            if (format && format.trim() !== "") {
-                fallbackQuery += ` AND TRIM(LOWER(matchFormat)) = TRIM(LOWER($${fallbackValues.length + 1}))`;
-                fallbackValues.push(format);
+                fallbackQuery += ` AND seriesid = $${fallbackValues.length}`;
             }
 
-            fallbackQuery += ` ORDER BY id ASC LIMIT $${fallbackValues.length + 1}`;
+            if (matchFormatVal && matchFormatVal.toString().trim() !== "") {
+                fallbackValues.push(matchFormatVal);
+                fallbackQuery += ` AND TRIM(LOWER(matchFormat)) = TRIM(LOWER($${fallbackValues.length}))`;
+            }
+
+            if (seriesname && seriesname.toString().trim() !== "") {
+                fallbackValues.push(seriesname);
+                fallbackQuery += ` AND TRIM(LOWER(seriesname)) = TRIM(LOWER($${fallbackValues.length}))`;
+            }
+
+            if (teamid && teamid.toString().trim() !== "") {
+                fallbackValues.push(teamid);
+                fallbackQuery += ` AND (teamid1 = $${fallbackValues.length} OR teamid2 = $${fallbackValues.length})`;
+            }
+
+            if (teamid1 !== undefined && teamid1 !== null && teamid1 !== "") {
+                fallbackValues.push(Number(teamid1));
+                fallbackQuery += ` AND teamid1 = $${fallbackValues.length}`;
+            }
+
+            if (teamid2 !== undefined && teamid2 !== null && teamid2 !== "") {
+                fallbackValues.push(Number(teamid2));
+                fallbackQuery += ` AND teamid2 = $${fallbackValues.length}`;
+            }
+
             fallbackValues.push(recordLimit);
+            fallbackQuery += ` ORDER BY startdate DESC NULLS LAST, id DESC LIMIT $${fallbackValues.length}`;
 
             const fallbackResult = await db.query(fallbackQuery, fallbackValues);
-            data = fallbackResult.rows;
+            data = fallbackResult.rows.reverse();
         }
 
         if (data.length === 0) {
@@ -2336,6 +2474,7 @@ const getNext10Matches = async (req, res) => {
         });
 
     } catch (error) {
+        console.error("Error in getNext10Matches API:", error);
         return res.status(500).send({
             success: false,
             message: 'Error in getNext10Matches API',
