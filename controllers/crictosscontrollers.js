@@ -1019,7 +1019,7 @@ const series = async (req, res) => {
 
 
     try {
-        const { id, seriesname, seriestype, startTime, endTime, userZone, isNotify } = req.body
+        const { id, seriesname, seriestype, startTime, endTime, userZone, isNotify, isactive } = req.body
 
         if (!seriesname) {
             return res.status(500).send({
@@ -1062,6 +1062,11 @@ const series = async (req, res) => {
                     message: "isNotify must be true or false"
                 });
             }
+        }
+
+        let isactiveBool = true;
+        if (isactive !== undefined && isactive !== null && isactive !== "") {
+            isactiveBool = isactive === true || isactive === "true" || isactive === 1 || isactive === "1";
         }
 
 
@@ -1123,10 +1128,11 @@ const series = async (req, res) => {
                 seriestype = $2,
                 betStartTime = $3,
                 betEndTime = $4,
-                 "isnotify" = $5,
-                updated_date = $6
+                "isnotify" = $5,
+                updated_date = $6,
+                isactive = $7
 
-             WHERE id = $7`,
+             WHERE id = $8`,
                 [
                     seriesname,
                     seriestype,
@@ -1134,6 +1140,7 @@ const series = async (req, res) => {
                     EndUTime,
                     notify,
                     betStartUTC,
+                    isactiveBool,
                     id
                 ]
             );
@@ -1152,11 +1159,11 @@ const series = async (req, res) => {
         await db.query(
             `INSERT INTO tblseries
         (seriesname, seriestype, betStartTime, betEndTime,
-         created_date, updated_date,"isnotify")
-         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+         created_date, updated_date, "isnotify", isactive)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
             [
 
-                seriesname, seriestype, StartTime, EndUTime, betStartUTC, null, notify
+                seriesname, seriestype, StartTime, EndUTime, betStartUTC, null, notify, isactiveBool
             ]
         );
 
@@ -1179,7 +1186,8 @@ const series = async (req, res) => {
 const getAllSeries = async (req, res) => {
     try {
 
-        const { seriesid, seriestype } = req.body;
+        const payload = { ...req.query, ...req.body };
+        const { seriesid, seriestype, isactive } = payload;
 
 
         let query = "SELECT * FROM tblseries WHERE 1=1";
@@ -1199,7 +1207,12 @@ const getAllSeries = async (req, res) => {
             values.push(seriestype);
         }
 
-        // ORDER 
+        // IsActive Filter
+        if (isactive !== undefined && isactive !== null && isactive !== "") {
+            const isactiveBool = isactive === true || isactive === "true" || isactive === 1 || isactive === "1";
+            query += ` AND isactive = $${values.length + 1}`;
+            values.push(isactiveBool);
+        }
 
         // ORDER BY MUST BE LAST
         query += " ORDER BY id ASC";
@@ -1231,6 +1244,92 @@ const getAllSeries = async (req, res) => {
         });
     }
 }
+
+const updateSeriesIsActive = async (req, res) => {
+    try {
+        console.log("Body / Query Data for updateSeriesIsActive:", { ...req.query, ...req.body });
+        const payload = { ...req.query, ...req.body };
+        const { id, isactive } = payload;
+
+        const targetId = id;
+
+        if (!targetId) {
+            return res.status(400).json({
+                success: false,
+                message: "Series ID is required"
+            });
+        }
+
+        if (isactive === undefined || isactive === null || isactive === "") {
+            return res.status(400).json({
+                success: false,
+                message: "isactive (true or false) is required"
+            });
+        }
+
+        let isactiveBool;
+        if (typeof isactive === "boolean") {
+            isactiveBool = isactive;
+        } else if (typeof isactive === "string") {
+            const lowerVal = isactive.trim().toLowerCase();
+            if (lowerVal === "true" || lowerVal === "1") {
+                isactiveBool = true;
+            } else if (lowerVal === "false" || lowerVal === "0") {
+                isactiveBool = false;
+            } else {
+                return res.status(400).json({
+                    success: false,
+                    message: "isactive must be true or false"
+                });
+            }
+        } else if (typeof isactive === "number") {
+            isactiveBool = isactive === 1;
+        } else {
+            return res.status(400).json({
+                success: false,
+                message: "isactive must be true or false"
+            });
+        }
+
+        // Check if series exists in tblseries
+        const { rows: checkSeries } = await db.query(
+            `SELECT id, seriesname, isactive FROM tblseries WHERE id = $1`,
+            [targetId]
+        );
+
+        if (checkSeries.length === 0) {
+            return res.status(404).json({
+                success: false,
+                message: "Series not found"
+            });
+        }
+
+        // Update isactive status
+        const updateResult = await db.query(
+            `UPDATE tblseries
+             SET isactive = $1, updated_date = CURRENT_TIMESTAMP
+             WHERE id = $2
+             RETURNING id, seriesname, isactive`,
+            [isactiveBool, targetId]
+        );
+
+        const updatedSeries = updateResult.rows[0] || { id: Number(targetId), isactive: isactiveBool };
+
+        return res.status(200).json({
+            success: true,
+            message: `Series active status updated successfully to ${isactiveBool}`,
+            data: updatedSeries
+        });
+
+    } catch (error) {
+        console.error("Error in updateSeriesIsActive API:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Error updating series active status",
+            error: error.message || error
+        });
+    }
+};
 
 const deleteAllSeries = async (req, res) => {
     try {
@@ -3156,7 +3255,7 @@ const getBothTeamsLast5MatchToss = async (req, res) => {
 };
 
 export {
-    createUser, getAllUsers, login, dashboard, Usertype, getUsertype, deleteUsertype, series, getAllSeries, deleteAllSeries, Seriestype,
+    createUser, getAllUsers, login, dashboard, Usertype, getUsertype, deleteUsertype, series, getAllSeries, updateSeriesIsActive, deleteAllSeries, Seriestype,
     getSeriestype, deleteSeriestype, MatchFormat, deleteMatchFormat, getMatchFormat, schedules, getSchedule, getNext10Matches, getUpdatedTossRecords, updateTossStatus, ContactUS,
     getAllAds, insertAds, createGuestToken, addMatchView, getScheduleViewCount, createteam, getteam, deleteteam, saveFcmToken, submitMatchVote, getMatchVoteResults, getCurrentMatchesVoting,
     getBothTeamsLast5MatchToss
