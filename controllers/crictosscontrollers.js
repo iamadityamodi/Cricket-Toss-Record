@@ -2016,7 +2016,7 @@ const updateTossStatus = async (req, res) => {
             }
         }
 
- 
+
 
         // Send notification only if notify is true
         if (notify === true) {
@@ -2094,25 +2094,21 @@ const sendGuestTossNotification = async ({
 
 
     const firebaseMessage = {
-        notification: {
-            title: bothTeamName,
-            body: message
-        },
-
         data: {
+            title: String(bothTeamName),
+            body: String(message),
+
             type: "TOSS_UPDATE",
+
             EXTRA_MATCH_ID: String(matchId),
             EXTRA_TEAM_ID: String(teamId),
             EXTRA_SERIES_ID: String(seriesId),
+
             click_action: "ViewTossRecordActivity"
         },
 
         android: {
-            priority: "high",
-
-            notification: {
-                sound: "default"
-            }
+            priority: "high"
         },
 
         tokens: tokens
