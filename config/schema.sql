@@ -75,3 +75,16 @@ CREATE TABLE IF NOT EXISTS match_votes (
     guest_id TEXT DEFAULT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE TABLE app_versions (
+    id SERIAL PRIMARY KEY,
+    platform VARCHAR(20) NOT NULL DEFAULT 'android',
+    current_version VARCHAR(50),
+    update_version VARCHAR(50) NOT NULL,
+    require_update BOOLEAN NOT NULL DEFAULT false,
+    message TEXT,
+    update_url TEXT,
+    is_active BOOLEAN NOT NULL DEFAULT true,
+    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+);

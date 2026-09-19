@@ -1,6 +1,6 @@
 import express from "express";
 
-import { addMatchView, ContactUS, createGuestToken, createteam, createUser, dashboard, deleteAllSeries, deleteMatchFormat, deleteSeriestype, deleteteam, deleteUsertype, getAllAds, getAllSeries, updateSeriesIsActive, getAllUsers, getMatchFormat, getSchedule, getNext10Matches, getUpdatedTossRecords, getScheduleViewCount, getSeriestype, getteam, getUsertype, insertAds, login, MatchFormat, saveFcmToken, schedules, series, Seriestype, updateTossStatus, Usertype, submitMatchVote, getMatchVoteResults, getCurrentMatchesVoting, getBothTeamsLast5MatchToss }
+import { addMatchView, ContactUS, createGuestToken, createteam, createUser, dashboard, deleteAllSeries, deleteMatchFormat, deleteSeriestype, deleteteam, deleteUsertype, getAllAds, getAllSeries, updateSeriesIsActive, getAllUsers, getMatchFormat, getSchedule, getNext10Matches, getUpdatedTossRecords, getScheduleViewCount, getSeriestype, getteam, getUsertype, insertAds, login, MatchFormat, saveFcmToken, schedules, series, Seriestype, updateTossStatus, Usertype, submitMatchVote, getMatchVoteResults, getCurrentMatchesVoting, getBothTeamsLast5MatchToss, VersionCheck, getfcmtokens, removeads, getRemoveAds }
     from "../controllers/crictosscontrollers.js"
 import authenticateToken from "../controllers/authMiddleware.js";
 import { SendNotification } from "../controllers/sendNotification.js";
@@ -73,6 +73,13 @@ router.post("/schedule-view-count", authenticateToken, getScheduleViewCount);
 
 // Send Notification
 router.post("/send", SendNotification);
+
+router.post("/VersionCheck", VersionCheck);
+
+router.post("/getfcmtokens", getfcmtokens);
+
+router.post("/removeads", removeads);
+router.post("/getRemoveAds", getRemoveAds);
 
 
 

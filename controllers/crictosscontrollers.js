@@ -168,8 +168,8 @@ const getAllUsers = async (req, res) => {
 
         res.status(500).send({
             success: false,
-            message: 'Error in get all series type API',
-            error
+            message: 'Error in get all users API',
+            error: error.message || error
         })
     }
 }
@@ -747,6 +747,134 @@ const insertAds = async (req, res) => {
 }
 
 
+const removeads = async (req, res) => {
+    try {
+        const { id, userid, userId } = { ...req.query, ...req.body };
+        const targetUserId = userid || userId || id;
+
+        if (!targetUserId) {
+            return res.status(400).send({
+                success: false,
+                message: 'User ID (userid) is required'
+            });
+        }
+
+        // Check if user exists in tabregistration table
+        const { rows: checkUser } = await db.query(
+            "SELECT id, firstname, emailid, mobileno FROM tabregistration WHERE id = $1",
+            [targetUserId]
+        );
+
+        if (checkUser.length === 0) {
+            return res.status(404).send({
+                success: false,
+                message: 'Registered user not found in tabregistration'
+            });
+        }
+
+        // Ensure tblremoveads table exists
+        await db.query(`
+            CREATE TABLE IF NOT EXISTS tblremoveads (
+                id SERIAL PRIMARY KEY,
+                userid INT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+        `);
+
+        // Check if user has already removed ads
+        const { rows: existingRecord } = await db.query(
+            "SELECT * FROM tblremoveads WHERE userid = $1 LIMIT 1",
+            [targetUserId]
+        );
+
+        if (existingRecord.length > 0) {
+            return res.status(200).send({
+                success: true,
+                message: 'Remove ads record already exists for this registered user.',
+                isRemoveAds: true,
+                data: existingRecord[0]
+            });
+        }
+
+        const data = await db.query(
+            `INSERT INTO tblremoveads ( userid )  
+            VALUES ($1) RETURNING *`,
+            [targetUserId]
+        );
+
+        return res.status(201).send({
+            success: true,
+            message: 'Successfully inserted remove ads record for registered user.',
+            isRemoveAds: true,
+            data: data.rows[0] || { userid: Number(targetUserId) }
+        });
+    } catch (error) {
+        console.error("Error in removeads API:", error);
+        return res.status(500).send({
+            success: false,
+            message: 'Error in remove ads API',
+            error: error.message || error
+        });
+    }
+};
+
+const getRemoveAds = async (req, res) => {
+    try {
+        const { id, userid } = { ...req.query, ...req.body };
+        const targetUserId = userid || id;
+
+        // Ensure tblremoveads table exists
+        await db.query(`
+            CREATE TABLE IF NOT EXISTS tblremoveads (
+                id SERIAL PRIMARY KEY,
+                userid INT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+        `);
+
+        if (targetUserId) {
+            // Search remove ads status by specific user ID
+            const { rows: data } = await db.query(
+                "SELECT * FROM tblremoveads WHERE userid = $1 LIMIT 1",
+                [targetUserId]
+            );
+
+            if (data.length === 0) {
+                return res.status(200).send({
+                    success: false,
+                    message: 'User has not removed ads',
+                     data: null
+                });
+            }
+
+            return res.status(200).send({
+                success: true,
+                message: 'User remove ads status fetched successfully',
+                 data: data[0]
+            });
+        }
+
+        // If no targetUserId passed, fetch all remove ads records
+        const { rows: data } = await db.query("SELECT * FROM tblremoveads ORDER BY id DESC");
+
+        return res.status(200).send({
+            success: true,
+            message: 'All remove ads records fetched successfully',
+            count: data.length,
+            data: data
+        });
+
+    } catch (error) {
+        console.error("Error in getRemoveAds API:", error);
+        return res.status(500).send({
+            success: false,
+            message: 'Error fetching remove ads data',
+            error: error.message || error
+        });
+    }
+};
+
+
 const getAllAds = async (req, res) => {
     try {
 
@@ -776,6 +904,69 @@ const getAllAds = async (req, res) => {
         })
     }
 }
+
+const maskFcmToken = (token) => {
+    if (!token || typeof token !== "string") {
+        return token;
+    }
+
+    const showStart = 10;
+    const showEnd = 10;
+
+    // Token is too short to show 10 + 10
+    if (token.length <= showStart + showEnd) {
+        return "*".repeat(token.length);
+    }
+
+    const start = token.slice(0, showStart);
+    const end = token.slice(-showEnd);
+    const middle = "*".repeat(token.length - showStart - showEnd);
+
+    return `${start}${middle}${end}`;
+};
+
+
+const getfcmtokens = async (req, res) => {
+    try {
+        const { rows: data } = await db.query(
+            "SELECT * FROM fcm_tokens"
+        );
+
+        console.log("DB TOTAL:", data.length);
+
+        if (data.length === 0) {
+            return res.status(404).send({
+                success: false,
+                message: "No FCM Tokens Available",
+                data: [],
+                totalcount: 0
+            });
+        }
+
+        const maskedData = data.map(item => ({
+            ...item,
+            fcm_token: maskFcmToken(item.fcm_token)
+        }));
+
+        console.log("API TOTAL:", maskedData.length);
+
+        return res.status(200).send({
+            success: true,
+            message: "Success.",
+            data: maskedData,
+            totalcount: maskedData.length
+        });
+
+    } catch (error) {
+        console.error(error);
+
+        return res.status(500).send({
+            success: false,
+            message: "Error in get all FCM tokens API",
+            error: error.message
+        });
+    }
+};
 
 const deleteUsertype = async (req, res) => {
     try {
@@ -2164,6 +2355,280 @@ const sendGuestTossNotification = async ({
 
 };
 
+/**
+ * Automatically checks tblschedule and sends notifications:
+ * 1st notification: ~40 minutes before match start
+ * 2nd notification: ~35 minutes before match start
+ * Includes atomic database locks and token deduplication to guarantee no double/duplicate sends
+ */
+const checkAndSend35MinMatchReminders = async (forcedMatchId = null, forcedType = null) => {
+    try {
+        // 1. Ensure tracking columns exist in tblschedule
+        await db.query(`
+            ALTER TABLE tblschedule ADD COLUMN IF NOT EXISTS is_40min_notified BOOLEAN DEFAULT FALSE;
+            ALTER TABLE tblschedule ADD COLUMN IF NOT EXISTS is_35min_notified BOOLEAN DEFAULT FALSE;
+        `);
+
+        let matches = [];
+
+        if (forcedMatchId) {
+            // Manual test for a specific match ID
+            const { rows } = await db.query(
+                `SELECT id, seriesid, seriesname, matchformatid, matchformat,
+                        startdate, enddate, teamname1, teamname2, teamid1, teamid2,
+                        matchno, tossstatus, is_40min_notified, is_35min_notified
+                 FROM tblschedule 
+                 WHERE id = $1`,
+                [forcedMatchId]
+            );
+            matches = rows;
+        } else {
+            // Query matches starting in the next 45 minutes that have at least one notification pending
+            const { rows } = await db.query(`
+                SELECT id, seriesid, seriesname, matchformatid, matchformat,
+                       startdate, enddate, teamname1, teamname2, teamid1, teamid2,
+                       matchno, tossstatus, is_40min_notified, is_35min_notified,
+                       ROUND(EXTRACT(EPOCH FROM (startdate - (NOW() AT TIME ZONE 'UTC'))) / 60) AS minutes_to_start_utc,
+                       ROUND(EXTRACT(EPOCH FROM (startdate - CURRENT_TIMESTAMP)) / 60) AS minutes_to_start_local
+                FROM tblschedule
+                WHERE (tossstatus IS FALSE OR tossstatus IS NULL)
+                  AND startdate IS NOT NULL
+                  AND (
+                      (is_40min_notified IS FALSE OR is_40min_notified IS NULL)
+                      OR
+                      (is_35min_notified IS FALSE OR is_35min_notified IS NULL)
+                  )
+                  AND (
+                      (startdate >= (NOW() AT TIME ZONE 'UTC') - INTERVAL '5 minutes'
+                       AND startdate <= (NOW() AT TIME ZONE 'UTC') + INTERVAL '45 minutes')
+                      OR
+                      (startdate >= CURRENT_TIMESTAMP - INTERVAL '5 minutes'
+                       AND startdate <= CURRENT_TIMESTAMP + INTERVAL '45 minutes')
+                  )
+                ORDER BY startdate ASC
+            `);
+            matches = rows;
+        }
+
+        if (matches.length === 0) {
+            return {
+                matchesChecked: 0,
+                matchesNotified: []
+            };
+        }
+
+        // 2. Fetch all active FCM tokens and strictly deduplicate using Set
+        const { rows: tokenRows } = await db.query(`
+            SELECT fcm_token
+            FROM fcm_tokens
+            WHERE is_active = true
+              AND fcm_token IS NOT NULL
+        `);
+
+        const allTokens = [...new Set(tokenRows.map(row => row.fcm_token).filter(t => t && typeof t === 'string' && t.trim() !== ''))];
+
+        const notifiedMatches = [];
+
+        for (const match of matches) {
+            const team1 = match.teamname1 || match.teamName1 || "Team 1";
+            const team2 = match.teamname2 || match.teamName2 || "Team 2";
+            const bothTeamName = `${team1} vs ${team2}`;
+
+            let minutesRemaining = Number(match.minutes_to_start_utc !== null && match.minutes_to_start_utc !== undefined 
+                ? match.minutes_to_start_utc 
+                : match.minutes_to_start_local);
+
+            if (isNaN(minutesRemaining) || minutesRemaining === null) {
+                const matchTime = new Date(match.startdate).getTime();
+                minutesRemaining = Math.round((matchTime - Date.now()) / (1000 * 60));
+            }
+
+            // Determine which notification stage needs to be sent
+            let notificationType = null;
+            let notificationTitle = "";
+            let notificationBody = "";
+
+            if (forcedType) {
+                notificationType = forcedType.toUpperCase().includes("40") ? "40MIN" : "35MIN";
+            } else if (minutesRemaining >= 37 && minutesRemaining <= 43 && !match.is_40min_notified) {
+                // 1st Notification: ~40 minutes before match
+                notificationType = "40MIN";
+            } else if (minutesRemaining >= 28 && minutesRemaining <= 36 && !match.is_35min_notified) {
+                // 2nd Notification: ~35 minutes before match
+                notificationType = "35MIN";
+            }
+
+            if (!notificationType) {
+                continue;
+            }
+
+            if (notificationType === "40MIN") {
+                notificationTitle = `${bothTeamName} - Toss In 10 Minutes!`;
+                notificationBody = `${bothTeamName} Please Vote now — who will win the toss?`;
+
+                // Atomic lock: claim 40-minute notification before sending
+                const lockResult = await db.query(`
+                    UPDATE tblschedule
+                    SET is_40min_notified = true,
+                        updateddate = NOW() AT TIME ZONE 'UTC'
+                    WHERE id = $1 AND (is_40min_notified IS FALSE OR is_40min_notified IS NULL)
+                `, [match.id]);
+
+                if (lockResult.rowCount === 0 && !forcedMatchId) {
+                    continue; // Already processed by another tick, skip
+                }
+            } else if (notificationType === "35MIN") {
+                notificationTitle = `${bothTeamName} - Toss In 5 Minutes!`;
+                notificationBody = `${bothTeamName} Please Vote now — who will win the toss?`;
+
+                // Atomic lock: claim 35-minute notification before sending (also mark 40min true to avoid late 40min sends)
+                const lockResult = await db.query(`
+                    UPDATE tblschedule
+                    SET is_35min_notified = true,
+                        is_40min_notified = true,
+                        updateddate = NOW() AT TIME ZONE 'UTC'
+                    WHERE id = $1 AND (is_35min_notified IS FALSE OR is_35min_notified IS NULL)
+                `, [match.id]);
+
+                if (lockResult.rowCount === 0 && !forcedMatchId) {
+                    continue; // Already processed by another tick, skip
+                }
+            }
+
+            let successCount = 0;
+            let failureCount = 0;
+
+            if (allTokens.length > 0 && messaging) {
+                const BATCH_SIZE = 500;
+                for (let i = 0; i < allTokens.length; i += BATCH_SIZE) {
+                    const tokenBatch = allTokens.slice(i, i + BATCH_SIZE);
+
+                    const firebaseMessage = {
+                        notification: {
+                            title: String(notificationTitle),
+                            body: String(notificationBody)
+                        },
+                        data: {
+                            title: String(notificationTitle),
+                            body: String(notificationBody),
+                            type: notificationType === "40MIN" ? "MATCH_40MIN_REMINDER" : "MATCH_35MIN_REMINDER",
+                            EXTRA_MATCH_ID: String(match.id),
+                            EXTRA_SERIES_ID: String(match.seriesid || ""),
+                            EXTRA_TEAM1_ID: String(match.teamid1 || ""),
+                            EXTRA_TEAM2_ID: String(match.teamid2 || ""),
+                            click_action: "ViewTossRecordActivity"
+                        },
+                        android: {
+                            priority: "high",
+                            collapseKey: `match_${match.id}_${notificationType}`
+                        },
+                        tokens: tokenBatch
+                    };
+
+                    try {
+                        const response = await messaging.sendEachForMulticast(firebaseMessage);
+                        successCount += response.successCount || 0;
+                        failureCount += response.failureCount || 0;
+
+                        // Deactivate invalid tokens
+                        response.responses.forEach(async (result, index) => {
+                            if (!result.success) {
+                                const errorCode = result.error?.code;
+                                if (
+                                    errorCode === "messaging/registration-token-not-registered" ||
+                                    errorCode === "messaging/invalid-registration-token"
+                                ) {
+                                    const invalidToken = tokenBatch[index];
+                                    await db.query(`
+                                        UPDATE fcm_tokens
+                                        SET is_active = false,
+                                            updated_at = CURRENT_TIMESTAMP
+                                        WHERE fcm_token = $1
+                                    `, [invalidToken]).catch(() => {});
+                                }
+                            }
+                        });
+                    } catch (fcmErr) {
+                        console.error(`Error sending ${notificationType} multicast for match ID ${match.id}:`, fcmErr.message);
+                    }
+                }
+            } else if (!messaging) {
+                console.warn(`[Match Reminder] Firebase messaging is not initialized, skipping push send for match ${match.id}.`);
+            }
+
+            console.log(`✅ [Match Reminder ${notificationType}] Sent for Match #${match.id} (${bothTeamName}) | Devices: ${allTokens.length} (Success: ${successCount}, Fail: ${failureCount})`);
+
+            notifiedMatches.push({
+                matchId: match.id,
+                notificationType,
+                match: bothTeamName,
+                seriesName: match.seriesname,
+                startDate: match.startdate,
+                minutesRemaining,
+                tokensTargeted: allTokens.length,
+                successCount,
+                failureCount
+            });
+        }
+
+        return {
+            matchesChecked: matches.length,
+            matchesNotified: notifiedMatches
+        };
+
+    } catch (error) {
+        console.error("Error in checkAndSend35MinMatchReminders:", error);
+        throw error;
+    }
+};
+
+/**
+ * Controller API endpoint for match reminders (35 min and 40 min)
+ */
+const autoSend35MinMatchNotification = async (req, res) => {
+    try {
+        const { matchId, force, reminderType } = { ...req.query, ...req.body };
+        const targetMatchId = matchId || (force ? matchId : null);
+
+        const result = await checkAndSend35MinMatchReminders(targetMatchId, reminderType);
+
+        return res.status(200).json({
+            success: true,
+            message: result.matchesNotified.length > 0 
+                ? `Successfully sent reminders for ${result.matchesNotified.length} match stage(s)`
+                : "No matches in the 40-min or 35-min window found to notify",
+            data: result
+        });
+    } catch (error) {
+        console.error("Error in autoSend35MinMatchNotification API:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Error running match reminder check",
+            error: error.message || error
+        });
+    }
+};
+
+/**
+ * Background auto-scheduler running every 60 seconds
+ */
+let isMatchReminderRunning = false;
+const startMatchReminderScheduler = () => {
+    console.log("⏰ [Match Reminder Scheduler] Auto-check started (runs every 60s for 40-min & 35-min match reminders)");
+
+    setInterval(async () => {
+        if (isMatchReminderRunning) return;
+        try {
+            isMatchReminderRunning = true;
+            await checkAndSend35MinMatchReminders();
+        } catch (e) {
+            console.error("Scheduled match reminder error:", e.message);
+        } finally {
+            isMatchReminderRunning = false;
+        }
+    }, 60 * 1000);
+};
+
 const getSchedule = async (req, res) => {
     try {
 
@@ -3250,9 +3715,110 @@ const getBothTeamsLast5MatchToss = async (req, res) => {
     }
 };
 
+const VersionCheck = async (req, res) => {
+
+    try {
+        const {
+            current_version,
+            platform = "android"
+        } = req.body;
+
+        if (!current_version) {
+            return res.status(400).json({
+                success: false,
+                message: "current_version is required"
+            });
+        }
+
+        const result = await db.query(
+            `
+            SELECT
+                current_version,
+                update_version,
+                require_update,
+                message,
+                update_url
+            FROM app_versions
+            WHERE platform = $1
+              AND is_active = true
+            ORDER BY id DESC
+            LIMIT 1
+            `,
+            [platform]
+        );
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({
+                success: false,
+                message: "App version configuration not found"
+            });
+        }
+
+        const versionData = result.rows[0];
+
+        const updateAvailable =
+            compareVersions(
+                current_version,
+                versionData.update_version
+            ) < 0;
+
+        return res.status(200).json({
+            success: true,
+            data: {
+                current_version,
+                update_version: versionData.update_version,
+                update_available: updateAvailable,
+                require_update:
+                    updateAvailable && versionData.require_update,
+                message: updateAvailable
+                    ? versionData.message
+                    : null,
+                update_url: updateAvailable
+                    ? versionData.update_url
+                    : null
+            }
+        });
+
+    } catch (error) {
+        console.error("Version check error:", error);
+
+        return res.status(500).json({
+            success: false,
+            message: "Internal server error"
+        });
+    }
+}
+
+function compareVersions(version1, version2) {
+
+    const v1 = version1
+        .replace(/^v/i, "")
+        .split(".")
+        .map(Number);
+
+    const v2 = version2
+        .replace(/^v/i, "")
+        .split(".")
+        .map(Number);
+
+    const maxLength = Math.max(v1.length, v2.length);
+
+    for (let i = 0; i < maxLength; i++) {
+
+        const part1 = v1[i] || 0;
+        const part2 = v2[i] || 0;
+
+        if (part1 < part2) return -1;
+        if (part1 > part2) return 1;
+    }
+
+    return 0;
+}
+
 export {
     createUser, getAllUsers, login, dashboard, Usertype, getUsertype, deleteUsertype, series, getAllSeries, updateSeriesIsActive, deleteAllSeries, Seriestype,
     getSeriestype, deleteSeriestype, MatchFormat, deleteMatchFormat, getMatchFormat, schedules, getSchedule, getNext10Matches, getUpdatedTossRecords, updateTossStatus, ContactUS,
     getAllAds, insertAds, createGuestToken, addMatchView, getScheduleViewCount, createteam, getteam, deleteteam, saveFcmToken, submitMatchVote, getMatchVoteResults, getCurrentMatchesVoting,
-    getBothTeamsLast5MatchToss
+    getBothTeamsLast5MatchToss, VersionCheck, getfcmtokens, removeads, getRemoveAds,
+    checkAndSend35MinMatchReminders, autoSend35MinMatchNotification, startMatchReminderScheduler
 }
