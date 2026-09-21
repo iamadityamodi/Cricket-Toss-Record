@@ -843,14 +843,14 @@ const getRemoveAds = async (req, res) => {
                 return res.status(200).send({
                     success: false,
                     message: 'User has not removed ads',
-                     data: null
+                    data: null
                 });
             }
 
             return res.status(200).send({
                 success: true,
                 message: 'User remove ads status fetched successfully',
-                 data: data[0]
+                data: data[0]
             });
         }
 
@@ -1809,6 +1809,8 @@ const schedules = async (req, res) => {
             })
         }
 
+        teamid1 = parseInt(teamid1, 10);
+        teamid2 = parseInt(teamid2, 10);
 
         // Get Series name
         const { rows: seriesdata } = await connection.query(
@@ -2435,8 +2437,8 @@ const checkAndSend35MinMatchReminders = async (forcedMatchId = null, forcedType 
             const team2 = match.teamname2 || match.teamName2 || "Team 2";
             const bothTeamName = `${team1} vs ${team2}`;
 
-            let minutesRemaining = Number(match.minutes_to_start_utc !== null && match.minutes_to_start_utc !== undefined 
-                ? match.minutes_to_start_utc 
+            let minutesRemaining = Number(match.minutes_to_start_utc !== null && match.minutes_to_start_utc !== undefined
+                ? match.minutes_to_start_utc
                 : match.minutes_to_start_local);
 
             if (isNaN(minutesRemaining) || minutesRemaining === null) {
@@ -2545,7 +2547,7 @@ const checkAndSend35MinMatchReminders = async (forcedMatchId = null, forcedType 
                                         SET is_active = false,
                                             updated_at = CURRENT_TIMESTAMP
                                         WHERE fcm_token = $1
-                                    `, [invalidToken]).catch(() => {});
+                                    `, [invalidToken]).catch(() => { });
                                 }
                             }
                         });
@@ -2595,7 +2597,7 @@ const autoSend35MinMatchNotification = async (req, res) => {
 
         return res.status(200).json({
             success: true,
-            message: result.matchesNotified.length > 0 
+            message: result.matchesNotified.length > 0
                 ? `Successfully sent reminders for ${result.matchesNotified.length} match stage(s)`
                 : "No matches in the 40-min or 35-min window found to notify",
             data: result
