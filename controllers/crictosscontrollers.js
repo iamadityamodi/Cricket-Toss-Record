@@ -1809,8 +1809,8 @@ const schedules = async (req, res) => {
             })
         }
 
-        teamid1 = parseInt(teamid1, 10);
-        teamid2 = parseInt(teamid2, 10);
+        // teamid1 = parseInt(teamid1, 10);
+        // teamid2 = parseInt(teamid2, 10);
 
         // Get Series name
         const { rows: seriesdata } = await connection.query(
