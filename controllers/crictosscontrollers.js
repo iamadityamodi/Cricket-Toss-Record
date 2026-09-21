@@ -2015,7 +2015,7 @@ const schedules = async (req, res) => {
 
     } catch (error) {
 
-
+        console.error("Error in schedules API:", error.message);
         return res.status(500).json({
             success: false,
             message: "Error creating bet",
@@ -2627,6 +2627,40 @@ const startMatchReminderScheduler = () => {
             isMatchReminderRunning = false;
         }
     }, 60 * 1000);
+};
+
+const deleteSchedule = async (req, res) => {
+    try {
+
+        const { id } = req.body;   // ✅ get id from params
+
+        const result = await db.query(
+            "DELETE FROM tblschedule WHERE id = $1",
+            [id]
+        );
+
+
+
+        if (result.rowCount === 0) {
+            return res.status(404).send({
+                success: false,
+                message: "Record not found"
+            });
+        }
+
+        res.status(200).send({
+            success: true,
+            message: "Record deleted successfully"
+        });
+
+    } catch (error) {
+        console.error("Error in deleteSchedule API:", error);
+        res.status(500).send({
+            success: false,
+            message: "Error in delete API",
+            error
+        });
+    }
 };
 
 const getSchedule = async (req, res) => {
@@ -3820,5 +3854,5 @@ export {
     getSeriestype, deleteSeriestype, MatchFormat, deleteMatchFormat, getMatchFormat, schedules, getSchedule, getNext10Matches, getUpdatedTossRecords, updateTossStatus, ContactUS,
     getAllAds, insertAds, createGuestToken, addMatchView, getScheduleViewCount, createteam, getteam, deleteteam, saveFcmToken, submitMatchVote, getMatchVoteResults, getCurrentMatchesVoting,
     getBothTeamsLast5MatchToss, VersionCheck, getfcmtokens, removeads, getRemoveAds,
-    checkAndSend35MinMatchReminders, autoSend35MinMatchNotification, startMatchReminderScheduler
+    checkAndSend35MinMatchReminders, autoSend35MinMatchNotification, startMatchReminderScheduler, deleteSchedule
 }

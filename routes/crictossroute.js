@@ -1,6 +1,6 @@
 import express from "express";
 
-import { addMatchView, ContactUS, createGuestToken, createteam, createUser, dashboard, deleteAllSeries, deleteMatchFormat, deleteSeriestype, deleteteam, deleteUsertype, getAllAds, getAllSeries, updateSeriesIsActive, getAllUsers, getMatchFormat, getSchedule, getNext10Matches, getUpdatedTossRecords, getScheduleViewCount, getSeriestype, getteam, getUsertype, insertAds, login, MatchFormat, saveFcmToken, schedules, series, Seriestype, updateTossStatus, Usertype, submitMatchVote, getMatchVoteResults, getCurrentMatchesVoting, getBothTeamsLast5MatchToss, VersionCheck, getfcmtokens, removeads, getRemoveAds }
+import { addMatchView, ContactUS, createGuestToken, createteam, createUser, dashboard, deleteAllSeries, deleteMatchFormat, deleteSeriestype, deleteteam, deleteUsertype, getAllAds, getAllSeries, updateSeriesIsActive, getAllUsers, getMatchFormat, getSchedule, getNext10Matches, getUpdatedTossRecords, getScheduleViewCount, getSeriestype, getteam, getUsertype, insertAds, login, MatchFormat, saveFcmToken, schedules, series, Seriestype, updateTossStatus, Usertype, submitMatchVote, getMatchVoteResults, getCurrentMatchesVoting, getBothTeamsLast5MatchToss, VersionCheck, getfcmtokens, removeads, getRemoveAds, deleteSchedule }
     from "../controllers/crictosscontrollers.js"
 import authenticateToken from "../controllers/authMiddleware.js";
 import { SendNotification } from "../controllers/sendNotification.js";
@@ -38,6 +38,7 @@ router.post("/deleteAllSeries", authenticateToken, deleteAllSeries);
 // Create and get Schedule
 router.post("/schedules", authenticateToken, schedules);
 router.post("/getSchedule", authenticateToken, getSchedule);
+router.post("/deleteSchedule", authenticateToken, deleteSchedule);
 router.post("/getNext10Matches", authenticateToken, getNext10Matches);
 router.post("/getNext10MatchRecords", authenticateToken, getNext10Matches);
 router.post("/getUpdatedTossRecords", authenticateToken, getUpdatedTossRecords);
