@@ -1768,6 +1768,8 @@ const deleteMatchFormat = async (req, res) => {
 
 const schedules = async (req, res) => {
 
+    console.log("BODY => ", req.body);
+
     let connection;
 
     try {
@@ -2014,7 +2016,6 @@ const schedules = async (req, res) => {
         }
 
     } catch (error) {
-
         console.error("Error in schedules API:", error.message);
         return res.status(500).json({
             success: false,
