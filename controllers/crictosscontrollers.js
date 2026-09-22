@@ -1406,7 +1406,7 @@ const getAllSeries = async (req, res) => {
         }
 
         // ORDER BY MUST BE LAST
-        query += " ORDER BY id ASC";
+        query += " ORDER BY betStartTime ASC, id ASC";
 
 
 
@@ -2708,7 +2708,7 @@ const getSchedule = async (req, res) => {
         }
 
         // ORDER BY MUST BE LAST
-        query += " ORDER BY id ASC";
+       query += " ORDER BY startdate ASC, id ASC";
 
         const { rows: data } = await db.query(query, values);
 
