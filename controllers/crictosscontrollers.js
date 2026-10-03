@@ -161,7 +161,7 @@ const getAllUsers = async (req, res) => {
 
         res.status(200).send({
             success: true,
-            message: 'Success.',
+            message: 'Success...',
             data: data,
         })
     } catch (error) {
@@ -700,7 +700,7 @@ const getUsertype = async (req, res) => {
 
         res.status(200).send({
             success: true,
-            message: 'Success.',
+            message: 'Success...',
             data: data,
         })
     } catch (error) {
@@ -892,7 +892,7 @@ const getAllAds = async (req, res) => {
 
         res.status(200).send({
             success: true,
-            message: 'Success.',
+            message: 'Success...',
             data: data,
         })
     } catch (error) {
@@ -1107,6 +1107,415 @@ const createteam = async (req, res) => {
 
 
 
+const createplayer = async (req, res) => {
+
+
+
+    try {
+        const { id, teamid, playerformatid, playername } = req.body
+
+        //    // Convert ID
+        //     if (id === "" || id === undefined || id === null) {
+        //         id = null;
+        //     } else {
+        //         id = Number(id);
+        //     }
+
+        //     // Convert Team ID
+        //     if (teamid === "" || teamid === undefined || teamid === null) {
+        //         teamid = null;
+        //     } else {
+        //         teamid = Number(teamid);
+        //     }
+
+        //     // Convert Player Format ID
+        //     if (
+        //         playerformatid === "" ||
+        //         playerformatid === undefined ||
+        //         playerformatid === null
+        //     ) {
+        //         playerformatid = null;
+        //     } else {
+        //         playerformatid = Number(playerformatid);
+        //     }
+
+        if (!teamid) {
+            return res.status(500).send({
+                success: false,
+                message: 'Please enter team name'
+            })
+        }
+
+        if (!playerformatid) {
+            return res.status(500).send({
+                success: false,
+                message: 'Please enter player format name'
+            })
+        }
+
+        if (!playername) {
+            return res.status(500).send({
+                success: false,
+                message: 'Please enter player name'
+            })
+        }
+
+
+        const createdTimeUTC = DateTime.utc().toSQL({ includeOffset: false });
+
+
+        /* =====================================================
+           UPDATE (id provided and series exists)
+        ===================================================== */
+
+        if (id) {
+            const { rows: checkTablePlayerFormat } = await db.query(
+                `SELECT id FROM tblplayerformat WHERE id = $1`,
+                [id]
+            );
+
+            if (checkTablePlayerFormat.length === 0) {
+                return res.status(404).json({
+                    success: false,
+                    message: "Player format not found"
+                });
+            }
+
+            let playerFormatName = checkTablePlayerFormat[0].playerformatname;
+
+            await db.query(
+                `UPDATE teams
+             SET
+                teamname = $1,
+                updateddate = $2
+             WHERE id = $3`,
+                [
+                    teamname,
+                    createdTimeUTC,
+                    id
+                ]
+            );
+
+
+            return res.status(200).json({
+                success: true,
+                message: "Successfully Updated"
+            });
+        }
+
+        /* =====================================================
+           INSERT (new series)
+        ===================================================== */
+
+        const { rows: checkTeams } = await db.query(
+            `SELECT * FROM teams WHERE id = $1`,
+            [teamid]
+        );
+
+        if (checkTeams.length === 0) {
+            return res.status(404).json({
+                success: false,
+                message: "Team not found"
+            });
+        }
+        console.log("teamName", checkTeams);
+
+
+        let teamName = checkTeams[0].teamname;
+
+        console.log("teamName", teamName);
+
+
+        const { rows: checkTablePlayerFormat } = await db.query(
+            `SELECT * FROM tblplayerformat WHERE id = $1`,
+            [playerformatid]
+        );
+
+        if (checkTablePlayerFormat.length === 0) {
+            return res.status(404).json({
+                success: false,
+                message: "Player format not found"
+            });
+        }
+
+        let playerFormatName = checkTablePlayerFormat[0].playerformatname;
+
+        // Check duplicate team name
+        const { rows: existingPlayer } = await db.query(
+            `SELECT id
+             FROM tblplayer
+             WHERE LOWER(TRIM(playername)) = LOWER(TRIM($1))`,
+            [playername]
+        );
+
+        if (existingPlayer.length > 0) {
+            return res.status(409).json({
+                success: false,
+                message: "Player name already exists"
+            });
+        }
+
+        await db.query(
+            `INSERT INTO tblplayer
+        (playername, teamid, teamname,playerformatid, playerformatname, createddate)
+         VALUES ($1, $2, $3, $4, $5, $6)`,
+            [
+
+                playername, teamid, teamName, playerformatid, playerFormatName, createdTimeUTC
+            ]
+        );
+
+        return res.status(201).json({
+            success: true,
+            message: "Successfully Inserted New Player"
+        });
+
+    } catch (error) {
+
+        console.log("Error in createplayer:", error);
+
+        return res.status(500).json({
+            success: false,
+            message: "Error creating bet",
+            error: error.message
+        });
+    }
+}
+
+
+
+const getplayer = async (req, res) => {
+
+    try {
+
+        const { playername } = req.body;
+
+
+        let query = "SELECT * FROM tblplayer WHERE 1=1";
+        let values = [];
+
+
+
+        // Series Type
+        if (playername && playername.trim() !== "") {
+            query += `
+                AND playername ILIKE $${values.length + 1}
+            `;
+
+            values.push(`%${playername.trim()}%`);
+        }
+
+        // ORDER 
+
+        // ORDER BY MUST BE LAST
+        query += " ORDER BY id ASC";
+
+
+        const { rows: data } = await db.query(query, values);
+
+        if (data.length === 0) {
+            return res.status(404).send({
+                success: false,
+                message: 'No player Available',
+                data: []
+            });
+        }
+
+        res.status(200).send({
+            success: true,
+            message: 'Success...',
+            data: data,
+        });
+
+
+
+
+
+    } catch (error) {
+        ;
+        res.status(500).send({
+            success: false,
+            message: "Error in team API",
+            error
+        });
+    }
+
+
+
+}
+
+
+
+const createplayerformat = async (req, res) => {
+
+    try {
+        const { id, playerformat } = req.body
+
+        if (!playerformat) {
+            return res.status(500).send({
+                success: false,
+                message: 'Please enter player format'
+            })
+        }
+
+
+        const createdTimeUTC = DateTime.utc().toSQL({ includeOffset: false });
+
+
+        /* =====================================================
+           UPDATE (id provided and series exists)
+        ===================================================== */
+
+        if (id) {
+            const { rows: checkPlayerFormat } = await db.query(
+                `SELECT id FROM tblplayerformat WHERE id = $1`,
+                [id]
+            );
+
+            if (checkPlayerFormat.length === 0) {
+                return res.status(404).json({
+                    success: false,
+                    message: "Player format not found"
+                });
+            }
+
+            await db.query(
+                `UPDATE tblplayerformat
+             SET
+                playerformatname = $1,
+                updateddate = $2
+             WHERE id = $3`,
+                [
+                    playerformat,
+                    createdTimeUTC,
+                    id
+                ]
+            );
+
+
+            return res.status(200).json({
+                success: true,
+                message: "Successfully Updated"
+            });
+        }
+
+        /* =====================================================
+           INSERT (new player format)
+        ===================================================== */
+
+        // Check duplicate player format
+        const { rows: existingPlayerFormat } = await db.query(
+            `SELECT id
+             FROM tblplayerformat
+             WHERE LOWER(TRIM(playerformatname)) = LOWER(TRIM($1))`,
+            [playerformat]
+        );
+
+        if (existingPlayerFormat.length > 0) {
+            return res.status(409).json({
+                success: false,
+                message: "Player format already exists"
+            });
+        }
+
+        await db.query(
+            `INSERT INTO tblplayerformat
+        (playerformatname, createddate)
+         VALUES ($1, $2)`,
+            [
+
+                playerformat, createdTimeUTC
+            ]
+        );
+
+        return res.status(201).json({
+            success: true,
+            message: "Successfully Inserted New Player Format"
+        });
+
+    } catch (error) {
+
+
+        return res.status(500).json({
+            success: false,
+            message: "Error creating bet",
+            error: error.message
+        });
+    }
+}
+
+
+
+const getplayerformat = async (req, res) => {
+
+    try {
+
+        const { playerformatname } = req.body;
+
+
+        let query = `
+            SELECT
+                id,
+                playerformatname,
+                createddate,
+                updateddate
+            FROM tblplayerformat
+            WHERE 1=1
+        `;
+        let values = [];
+
+
+
+        // Series Type
+        if (playerformatname && playerformatname.trim() !== "") {
+            query += `
+                AND playerformatname ILIKE $${values.length + 1}
+            `;
+
+            values.push(`%${playerformatname.trim()}%`);
+        }
+
+        // ORDER 
+
+        // ORDER BY MUST BE LAST
+        query += " ORDER BY id ASC";
+
+
+        const { rows: data } = await db.query(query, values);
+
+        if (data.length === 0) {
+            return res.status(404).send({
+                success: false,
+                message: 'No team Available',
+                data: []
+            });
+        }
+
+        res.status(200).send({
+            success: true,
+            message: 'Success...',
+            data: data,
+        });
+
+
+
+
+
+    } catch (error) {
+
+        res.status(500).send({
+            success: false,
+            message: "Error in team API",
+            error
+        });
+    }
+
+
+
+}
+
+
+
 const getteam = async (req, res) => {
 
     try {
@@ -1146,7 +1555,7 @@ const getteam = async (req, res) => {
 
         res.status(200).send({
             success: true,
-            message: 'Success',
+            message: 'Success...',
             data: data,
         });
 
@@ -1614,7 +2023,7 @@ const getSeriestype = async (req, res) => {
 
         res.status(200).send({
             success: true,
-            message: 'Success.',
+            message: 'Success...',
             data: data,
         })
     } catch (error) {
@@ -1718,7 +2127,7 @@ const getMatchFormat = async (req, res) => {
 
         res.status(200).send({
             success: true,
-            message: 'Success.',
+            message: 'Success...',
             data: data,
         })
     } catch (error) {
@@ -2708,7 +3117,7 @@ const getSchedule = async (req, res) => {
         }
 
         // ORDER BY MUST BE LAST
-       query += " ORDER BY startdate ASC, id ASC";
+        query += " ORDER BY startdate ASC, id ASC";
 
         const { rows: data } = await db.query(query, values);
 
@@ -2720,10 +3129,48 @@ const getSchedule = async (req, res) => {
             });
         }
 
+        const groupedData = {};
+
+        data.forEach((item) => {
+
+            // Get date only from startdate
+            const date = new Date(item.startdate);
+
+            const dateKey =
+                `${String(date.getDate()).padStart(2, "0")}-` +
+                `${String(date.getMonth() + 1).padStart(2, "0")}-` +
+                `${date.getFullYear()}`;
+
+            // Create date group
+            if (!groupedData[dateKey]) {
+                groupedData[dateKey] = [];
+            }
+
+            // Add schedule
+            groupedData[dateKey].push(item);
+        });
+
+        // =====================================================
+        // CONVERT OBJECT TO ARRAY
+        // =====================================================
+
+        const groupedList = Object.entries(groupedData).map(
+            ([date, schedules]) => ({
+                date,
+                schedule: schedules
+            })
+        );
+
+        console.log("Grouped Schedule List:", groupedList);
+
+        // =====================================================
+        // RESPONSE
+        // =====================================================
+
         res.status(200).send({
             success: true,
-            message: 'Success',
-            data: data,
+            message: 'Success...',
+            data: groupedList,
         });
 
     } catch (error) {
@@ -3857,5 +4304,5 @@ export {
     getSeriestype, deleteSeriestype, MatchFormat, deleteMatchFormat, getMatchFormat, schedules, getSchedule, getNext10Matches, getUpdatedTossRecords, updateTossStatus, ContactUS,
     getAllAds, insertAds, createGuestToken, addMatchView, getScheduleViewCount, createteam, getteam, deleteteam, saveFcmToken, submitMatchVote, getMatchVoteResults, getCurrentMatchesVoting,
     getBothTeamsLast5MatchToss, VersionCheck, getfcmtokens, removeads, getRemoveAds,
-    checkAndSend35MinMatchReminders, autoSend35MinMatchNotification, startMatchReminderScheduler, deleteSchedule
+    checkAndSend35MinMatchReminders, autoSend35MinMatchNotification, startMatchReminderScheduler, deleteSchedule, createplayer, getplayer, createplayerformat, getplayerformat
 }
