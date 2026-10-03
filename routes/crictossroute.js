@@ -1,6 +1,6 @@
 import express from "express";
 
-import { addMatchView, ContactUS, createGuestToken, createteam, createUser, dashboard, deleteAllSeries, deleteMatchFormat, deleteSeriestype, deleteteam, deleteUsertype, getAllAds, getAllSeries, updateSeriesIsActive, getAllUsers, getMatchFormat, getSchedule, getNext10Matches, getUpdatedTossRecords, getScheduleViewCount, getSeriestype, getteam, getUsertype, insertAds, login, MatchFormat, saveFcmToken, schedules, series, Seriestype, updateTossStatus, Usertype, submitMatchVote, getMatchVoteResults, getCurrentMatchesVoting, getBothTeamsLast5MatchToss, VersionCheck, getfcmtokens, removeads, getRemoveAds, deleteSchedule }
+import { addMatchView, ContactUS, createGuestToken, createteam, createUser, dashboard, deleteAllSeries, deleteMatchFormat, deleteSeriestype, deleteteam, deleteUsertype, getAllAds, getAllSeries, updateSeriesIsActive, getAllUsers, getMatchFormat, getSchedule, getNext10Matches, getUpdatedTossRecords, getScheduleViewCount, getSeriestype, getteam, getUsertype, insertAds, login, MatchFormat, saveFcmToken, schedules, series, Seriestype, updateTossStatus, Usertype, submitMatchVote, getMatchVoteResults, getCurrentMatchesVoting, getBothTeamsLast5MatchToss, VersionCheck, getfcmtokens, removeads, getRemoveAds, deleteSchedule, createplayer, getplayer, getplayerformat, createplayerformat }
     from "../controllers/crictosscontrollers.js"
 import authenticateToken from "../controllers/authMiddleware.js";
 import { SendNotification } from "../controllers/sendNotification.js";
@@ -22,6 +22,16 @@ router.post("/dashboard", authenticateToken, dashboard);
 router.post("/createteam", authenticateToken, createteam);
 router.post("/getteam", authenticateToken, getteam);
 router.post("/deleteteam", authenticateToken, deleteteam);
+
+// Create and get player format
+router.post("/createplayerformat", authenticateToken, createplayerformat);
+router.post("/getplayerformat", authenticateToken, getplayerformat);
+
+
+// Create and get player
+router.post("/createplayer", authenticateToken, createplayer);
+router.post("/getplayer", authenticateToken, getplayer);
+
 
 
 // Create and get Usertype
