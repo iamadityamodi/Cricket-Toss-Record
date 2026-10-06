@@ -4,9 +4,11 @@ dotenv.config();
 import express from "express";
 import crictossRoute from "./routes/crictossroute.js";
 import { startMatchReminderScheduler } from "./controllers/crictosscontrollers.js";
+import apiLogger from "./middleware/apiLogger.js";
 
 const app = express();
 
+app.use(apiLogger);
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
