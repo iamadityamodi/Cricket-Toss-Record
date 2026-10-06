@@ -88,3 +88,15 @@ CREATE TABLE app_versions (
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
+
+CREATE TABLE api_logs (
+    id BIGSERIAL PRIMARY KEY,
+    method VARCHAR(10),
+    endpoint TEXT,
+    status_code INT,
+    user_id VARCHAR(100),
+    ip_address VARCHAR(100),
+    request_body JSONB,
+    response_time_ms INT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
